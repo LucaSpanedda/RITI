@@ -1,0 +1,78 @@
+// THIS library
+caos = library("caos.lib");
+// import Standard Faust library
+// https://github.com/grame-cncm/faustlibraries/
+import("stdfaust.lib");
+
+/*
+Caos Library
+*/
+
+//----------------------------------------------------------- CLASSIC MODELS ---
+
+/*
+Logistic Map: simple non-linear dynamical equation
+starting population (x) = number from 0. to 1.
+resources of the population (r) = number from 0. to 4.
+*/
+logisticmap(x,r) = circuit ~ _
+    with {
+        circuit(y) = x-x' + y * r * (1-y);
+    };  
+//process = (.8, 3.99991) : logisticmap;
+
+/*
+Sine Map 
+https://www.sciencedirect.com/science/article/pii/S221137972101010X
+*/
+sinemap(y0, mu) = y
+    letrec {
+        'y = mu * sin(ma.PI * y + y0 - y0');
+    };
+//process = (0.5, 0.97) : sinemap;
+
+/*
+Lorenz Model
+*/
+lorenz(x0,y0,z0,sigma,rho,beta,dt,q) = circuit ~ si.bus(3)
+    with {
+        circuit(x,y,z) = 
+        ( (x+ (sigma*(y-x))*dt) * q )+ (x0-x0'), 
+        ( (y+ (rho*x -(x*z) -y) * dt)*q )+ (y0-y0'), 
+        ( (z+ ((x*y)-(beta*z)) * dt)*q )+ (z0-z0');
+    };
+//process = (1.2,1.3,1.6, 10.0,28,2.666667,.005, 1.0) : lorenz;
+
+/*
+Van Der Pol Oscillator of First Grade
+*/
+vanderpol(x0,y0,u,dt,epsilon) = circuit ~ si.bus(2)
+    with {
+        circuit(x,y) = 
+        ( x + (u * (x - x ^ 3 / 3 - y) * dt) ) + x0-x0', 
+        ( y + (x / max(u,epsilon) ) * dt ) + y0-y0';
+    };
+//process = (1,1, 1.0,0.01,2.2204460492503131e-016) : vanderpol;
+
+/*
+chua = circuit ~ si.bus(3)
+    with {
+        x0 = 0;
+        y0 = 0;
+        z0 = .28695;
+        k = 1.046634;
+        a = -27390.6;
+        b = -1.00004;
+        alpha = -1114000;
+        beta = -1508005;
+        gamma = -92;
+        epsilon = -1266320;
+        f(x) = b * x + (1/2) * (a-b) * (abs(x + 1) - abs(x - 1));
+        circuit(x,y,z) = 
+                        k * alpha * (y - x - f(x)) + (x0-x0'), 
+                        k * (x - y + z) + (y0-y0'), 
+                        (0 - k) * ((beta * y) + (gamma * z)) + (z0-z0');
+    };
+process = chua;
+*/
+//---------------------------------------------------------- MODIFIED MODELS ---
