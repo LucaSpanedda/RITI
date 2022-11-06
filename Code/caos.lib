@@ -8,7 +8,6 @@ import("stdfaust.lib");
 Caos Library
 */
 
-
 //----------------------------------------------------------- CLASSIC MODELS ---
 
 /*
@@ -28,6 +27,17 @@ sinemap(x0,s) = circuit ~ _
         circuit(x) = (x0-x0') + s * sin(ma.PI * x);
     };  
 // process = (.5,.9992) : sinemap -.5 : \(x).(x,x);
+
+/*
+Collatz conjecture
+*/
+collatz(x0) = circuit ~ _
+    with {
+        circuit(w) = (x0 - x0') + w : 
+                        \(x).((x%(2) == 0) * x, (x%(2) == 1) * x) : 
+                            \(odd,even).(odd/2,(even*3)+((even>0))) :> +;
+    };  
+process = sin( (collatz(139489332) * ma.PI));
 
 /*
 Lorenz Model
