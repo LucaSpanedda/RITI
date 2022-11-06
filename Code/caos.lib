@@ -28,6 +28,21 @@ sinemap(x0,s) = circuit ~ _
     };  
 // process = (.5,.9992) : sinemap -.5 : \(x).(x,x);
 
+henonmap(a,b) = circuit ~ _
+    with {
+        circuit(x) = 1 - (a * (x * x)) + (b * x');
+    };  
+process = (1.4,0.3) : henonmap : \(x).(x,x);
+
+/*
+First Return Map
+*/
+firstreturnmap(x0,u) = circuit ~ _
+    with {
+        circuit(x) = (x0-x0') + 4 * u * x * (1 - x);
+    };  
+// process = (.5,.9992) : firstreturnmap;
+
 /*
 Collatz conjecture
 */
@@ -37,7 +52,16 @@ collatz(x0) = circuit ~ _
                         \(x).((x%(2) == 0) * x, (x%(2) == 1) * x) : 
                             \(odd,even).(odd/2,(even*3)+((even>0))) :> +;
     };  
-process = sin( (collatz(139489332) * ma.PI));
+// process = sin( (collatz(139489332) * ma.PI));
+
+/*
+Bernoulli Shift
+*/
+bernoulli(x0) = circuit ~ _ : \(z).(z-int(z))
+    with {
+        circuit(x) = (x0 - x0') + (x * 2.0);
+    };
+// process = bernoulli(.1324);
 
 /*
 Lorenz Model
@@ -85,4 +109,16 @@ process =   (1.16346, -0.0972335, -0.905656, 1, -1.14286,
                 chua : \(x,y,z).(x+y+z)/3 : \(x).(x,x);
                 */
                 
+
+/*
+for more models serch:
+    -Dyadic transformation
+    -Gauss iterated map
+    -Bogdanov map
+    -Brusselator
+    -Lotka-Volterra
+    -Duffing Oscillator
+    -Hindmarsh–Rose neuron model
+*/
+
 //---------------------------------------------------------- MODIFIED MODELS ---
