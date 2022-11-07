@@ -122,10 +122,19 @@ for more models serch:
 */
 
 //---------------------------------------------------------- MODIFIED MODELS ---
+
 /*
-Larsen Map
-*/
+// Larsen Map
 process = _ : \(x,y).(ma.tanh(fi.dcblocker(abs(y) + 4 * u * x * (1 - x))))~_
     with {
         u = hslider("u",.1,.0,1,.001);
+    };
+*/
+
+/*
+Larsen Sine Map 
+*/
+process = _ : \(x,y).(fi.dcblocker(y + s * sin(ma.PI * x)))~_
+    with {
+        s = hslider("u",.1,.0,.88,.001);
     };
