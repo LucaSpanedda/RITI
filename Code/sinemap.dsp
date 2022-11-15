@@ -1,6 +1,6 @@
 // import Standard Faust library
 import("stdfaust.lib");
-sinemap(x0) = (circuit : fi.dcblocker : ma.tanh )~ _
+sinemap(x0) = (circuit : fi.dcblocker : ma.tanh)~ _
     with {
         circuit(x) =    (xInit-xInit') + mu * 
                         sin(ma.PI * ((x0 * fbAnalg) + (x * fbDigtl)));
