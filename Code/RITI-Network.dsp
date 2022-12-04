@@ -3,7 +3,7 @@ import("stdfaust.lib");
 
 // SYSTEM VARIABLES ----------------------------------------
 BPFilterOrder = 1;
-SystemSpaceVar = 4 * ma.SR;
+SystemSpaceVar = 2 * ma.SR;
 CaoticEQfbGain = 100;
 NetFBGain = 1;
 
@@ -146,11 +146,17 @@ sinemap(x0) = ( circuit : tanf(tans) : filterbanks(BPFilterOrder, 10, 1) *
                     tanf(k,x) = ma.tanh(k * x)/(k * x);
                     mu =        hslider("mu", .8, 0.01, 1.0, .001);
                     tans =      hslider("tahn", 100, 1, 100, .001);
-                    outGain =   hslider("outGain", 1, 1, 100, .001);
+                    outGain =   hslider("outGain [unit:dB]", -60, -60, 60.0, .001) : 
+                                ba.db2linear;
                 };
 //process = _ : fi.dcblocker : sinemap <: _,_;
 
-network(x) = \(FB1,FB2).( (x+(FB1@(SystemSpaceVar * .5) * NetFBGain) : sinemap), 
-                          (x+(FB2@(SystemSpaceVar * .6) * NetFBGain) : sinemap) 
-                        )~ si.bus(2);
-process = _ : network;
+Network(x) = 
+    \(fb1,fb2,fb3,fb4).
+        ( 
+            (x+((fb1+fb2+fb3+fb4)@(SystemSpaceVar*1) *NetFBGain/4) : sinemap), 
+            (x+((fb1+fb2+fb3+fb4)@(SystemSpaceVar*2) *NetFBGain/4) : sinemap),
+            (x+((fb1+fb2+fb3+fb4)@(SystemSpaceVar*3) *NetFBGain/4) : sinemap), 
+            (x+((fb1+fb2+fb3+fb4)@(SystemSpaceVar*4) *NetFBGain/4) : sinemap)
+        )~ si.bus(4);
+process = _ : fi.dcblocker : Network;
