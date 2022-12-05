@@ -4,12 +4,15 @@ import("stdfaust.lib");
 // SYSTEM VARIABLES ----------------------------------------
 Voices = 4;
 BPFilterOrder = 1;
-SystemSpaceVar = 2 * ma.SR;
+SystemSpaceVar = 1 * ma.SR;
 NetworkGlobalFBGain = hslider("NetworkGlobalFBGain",1,0,10,.001) : si.smoo;
 ExternalSigGain = hslider("ExternalSigGain",0,0,10,.001) : si.smoo;
-FreqShift = hslider("FreqShift",1,0.001,10,.001) : si.smoo;
+FreqShift = hslider("FreqShift",1.8,0.001,10,.001) : si.smoo;
 SingleUnitInternalFBGain = hslider("SingleUnitInternalFBGain", 1000, .0, 10000, .001): si.smoo;
+Tan = hslider("tahn", 10, 1, 100, .001);
+MUf = hslider("mu", .08, 0.01, 1.0, .001);
 OutputGain = hslider("OutputGain",1,0,1,.001) : si.smoo;
+
 // FILTERS -------------------------------------------------
 // TPT version of the One Pole and SVF Filter by Vadim Zavalishin
 // reference : (by Will Pirkle)
@@ -136,15 +139,14 @@ soloBP(O) = seq(r, O, BPsvftpt(  hslider("BW",50,1,20000,.001),
                     hslider("G",.8,0,1,.001) ) );
 //process = no.noise : soloBP(4);
 
-sinemap(S, x0) = ( circuit : tanf(tans) : filterbanks(BPFilterOrder, 10, 1, S) * 
+sinemap(S, x0) = ( circuit : tanf(Tan) : filterbanks(BPFilterOrder, 10, 1, S) * 
                    SingleUnitInternalFBGain ) ~ _ : fi.dcblocker
             with {
                     circuit(x) =    (xInit-xInit')  + mu *
                         sin(ma.PI * ((x0) + (x)));
                     xInit = .5;
                     tanf(k,x) = ma.tanh(k * x)/(k * x);
-                    mu =        hslider("mu", .8, 0.01, 1.0, .001);
-                    tans =      hslider("tahn", 1, 1, 100, .001);
+                    mu = MUf;
                 };
 //process = _ : fi.dcblocker : sinemap <: _,_;
 
