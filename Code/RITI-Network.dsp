@@ -2,13 +2,14 @@
 import("stdfaust.lib");
 
 // SYSTEM VARIABLES ----------------------------------------
+Voices = 4;
 BPFilterOrder = 1;
 SystemSpaceVar = 2 * ma.SR;
 NetworkGlobalFBGain = hslider("NetworkGlobalFBGain",1,0,10,.001) : si.smoo;
 ExternalSigGain = hslider("ExternalSigGain",0,0,10,.001) : si.smoo;
-FreqShift = hslider("fShift",1,0.001,10,.001) : si.smoo;
+FreqShift = hslider("FreqShift",1,0.001,10,.001) : si.smoo;
 SingleUnitInternalFBGain = hslider("SingleUnitInternalFBGain", 1000, .0, 10000, .001): si.smoo;
-
+OutputGain = hslider("OutputGain",1,0,1,.001) : si.smoo;
 // FILTERS -------------------------------------------------
 // TPT version of the One Pole and SVF Filter by Vadim Zavalishin
 // reference : (by Will Pirkle)
@@ -147,12 +148,11 @@ sinemap(S, x0) = ( circuit : tanf(tans) : filterbanks(BPFilterOrder, 10, 1, S) *
                 };
 //process = _ : fi.dcblocker : sinemap <: _,_;
 
-Network(Voices,ExternalSig) = loop ~ _ : (si.block(1), si.bus(Voices))
+Network(NetV,ExternalSig) = loop ~ _ : (si.block(1), si.bus(NetV))
     with{
-        loop(fb) =  par(i,  Voices,
-                        ( ((ExternalSig/Voices) * ExternalSigGain) + ((fb * NetworkGlobalFBGain)@(SystemSpaceVar*(i+1))) :
+        loop(fb) =  par(i,  NetV,
+                        ( ((ExternalSig/NetV) * ExternalSigGain) + ((fb * NetworkGlobalFBGain)@(SystemSpaceVar*(i+1))) :
                            sinemap(1*FreqShift))
-                    ) <: (si.bus(Voices) :> +/Voices), (si.bus(Voices));
+                    ) <: (si.bus(NetV) :> +/NetV), (si.bus(NetV));
         };
-
-process = _ : fi.dcblocker : Network(4);
+process = _ : fi.dcblocker : Network(Voices) : par(i, Voices, _ * OutputGain);
