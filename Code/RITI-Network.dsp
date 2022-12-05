@@ -4,9 +4,10 @@ import("stdfaust.lib");
 // SYSTEM VARIABLES ----------------------------------------
 BPFilterOrder = 1;
 SystemSpaceVar = 2 * ma.SR;
-CaoticEQfbGain = 1000;
-NetFBGain = 1;
+NetworkGlobalFBGain = hslider("NetworkGlobalFBGain",1,0,10,.001) : si.smoo;
+ExternalSigGain = hslider("ExternalSigGain",0,0,10,.001) : si.smoo;
 FreqShift = hslider("fShift",1,0.001,10,.001) : si.smoo;
+SingleUnitInternalFBGain = hslider("SingleUnitInternalFBGain", 1000, .0, 10000, .001): si.smoo;
 
 // FILTERS -------------------------------------------------
 // TPT version of the One Pole and SVF Filter by Vadim Zavalishin
@@ -135,28 +136,23 @@ soloBP(O) = seq(r, O, BPsvftpt(  hslider("BW",50,1,20000,.001),
 //process = no.noise : soloBP(4);
 
 sinemap(S, x0) = ( circuit : tanf(tans) : filterbanks(BPFilterOrder, 10, 1, S) * 
-                CaoticEQfbGain ) ~ _ : fi.dcblocker * outGain
+                   SingleUnitInternalFBGain ) ~ _ : fi.dcblocker
             with {
                     circuit(x) =    (xInit-xInit')  + mu *
-                        sin(ma.PI * ((x0) + (x * fbDigtl)));
+                        sin(ma.PI * ((x0) + (x)));
                     xInit = .5;
-                    fbDigtl =   hslider("fb Digital", 1, .0, 1.0, .001);
-                    fbAnalg =   hslider("fb Analogs [unit:dB]", -60, -60, 60.0, .001) : 
-                                ba.db2linear;
                     tanf(k,x) = ma.tanh(k * x)/(k * x);
                     mu =        hslider("mu", .8, 0.01, 1.0, .001);
                     tans =      hslider("tahn", 1, 1, 100, .001);
-                    outGain =   hslider("outGain [unit:dB]", -60, -60, 60.0, .001) : 
-                                ba.db2linear;
                 };
 //process = _ : fi.dcblocker : sinemap <: _,_;
 
-Network(Voices,x) = loop ~ _ : (si.block(1), si.bus(Voices))
+Network(Voices,ExternalSig) = loop ~ _ : (si.block(1), si.bus(Voices))
     with{
         loop(fb) =  par(i,  Voices,
-                        (x+((fb)@(SystemSpaceVar*(i+1)) * NetFBGain) : 
-                        sinemap(1*FreqShift))
-                    ) <: (si.bus(Voices) :> +), (si.bus(Voices));
+                        ( ((ExternalSig/Voices) * ExternalSigGain) + ((fb * NetworkGlobalFBGain)@(SystemSpaceVar*(i+1))) :
+                           sinemap(1*FreqShift))
+                    ) <: (si.bus(Voices) :> +/Voices), (si.bus(Voices));
         };
 
 process = _ : fi.dcblocker : Network(4);
