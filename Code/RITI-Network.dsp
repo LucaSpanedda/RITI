@@ -138,7 +138,7 @@ sinemap(S, x0) = ( circuit : tanf(tans) : filterbanks(BPFilterOrder, 10, 1, S) *
                 CaoticEQfbGain ) ~ _ : fi.dcblocker * outGain
             with {
                     circuit(x) =    (xInit-xInit')  + mu *
-                        sin(ma.PI * ((x0 * fbAnalg) + (x * fbDigtl)));
+                        sin(ma.PI * ((x0) + (x * fbDigtl)));
                     xInit = .5;
                     fbDigtl =   hslider("fb Digital", 1, .0, 1.0, .001);
                     fbAnalg =   hslider("fb Analogs [unit:dB]", -60, -60, 60.0, .001) : 
@@ -151,26 +151,12 @@ sinemap(S, x0) = ( circuit : tanf(tans) : filterbanks(BPFilterOrder, 10, 1, S) *
                 };
 //process = _ : fi.dcblocker : sinemap <: _,_;
 
-Network(x) = 
-    \(fb1,fb2,fb3,fb4).
-        ( 
-            (x+((fb2+fb3+fb4)@(SystemSpaceVar*1) *NetFBGain) : 
-                sinemap(nonlinearosc(1243,2,4)+1)*FreqShift ), 
-            (x+((fb1+fb3+fb4)@(SystemSpaceVar*2) *NetFBGain) : 
-                sinemap(nonlinearosc(5913,2,4)+1)*FreqShift ),
-            (x+((fb1+fb2+fb4)@(SystemSpaceVar*3) *NetFBGain) : 
-                sinemap(nonlinearosc(3943,2,4)+1)*FreqShift ), 
-            (x+((fb1+fb2+fb3)@(SystemSpaceVar*4) *NetFBGain) : 
-                sinemap(nonlinearosc(9914,2,4)+1)*FreqShift )
-        )~ si.bus(4);
-process = _ : fi.dcblocker : Network;
+Network(Voices,x) = loop ~ _ : (si.block(1), si.bus(Voices))
+    with{
+        loop(fb) =  par(i,  Voices,
+                        (x+((fb)@(SystemSpaceVar*(i+1)) * NetFBGain) : 
+                        sinemap(1*FreqShift))
+                    ) <: (si.bus(Voices) :> +), (si.bus(Voices));
+        };
 
-// generate a random number from a seed
-random(seed) = abs((seed * 1103515245) / 2147483647.0);
-// nonlinear Low Frequency oscillator based on arbritary Frequencies 
-nonlinearosc(seed,slowFactor,voices) = 
-    par(i, voices, sin(( (random(seed + (i * 1000))/ma.SR/slowFactor) : 
-                         (+ : \(x).(x-int(x)) ) ~ _) * 2 * ma.PI)
-        ) :> +/voices : _ + 1 : _ / 2;
-//process =   nonlinearosc(1243,2,4),nonlinearosc(5913,2,4),
-            //nonlinearosc(3943,2,4),nonlinearosc(9914,2,4);
+process = _ : fi.dcblocker : Network(4);
