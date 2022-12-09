@@ -101,6 +101,6 @@ oscillatorbanks(B, G, S) = par(i, B, ( os.osc(Flist(i) * S) *
 //process = oscillatorbanks(32, 400, 1) <: _,_;     
 
 smspan = hslider("sms",.8,0,1,.001) : si.smoo;    
-bwpan = hslider("bwpan",7,1,100,.001) : si.smoo;  
+bwpan = hslider("bwpan",5,1,100,.001) : si.smoo;  
 process =   (oscillatorbanks(32, 400, 1) * (1-smspan)) +
-            (no.noise : filterbanks(2, 32, 200, 1, bwpan) * smspan) <: _,_;
+            (no.noise : filterbanks(2, 64, 400, 1, bwpan) * smspan) <: _,_;
