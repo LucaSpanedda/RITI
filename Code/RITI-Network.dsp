@@ -8,8 +8,9 @@ SystemSpaceVar = 1 * ma.SR;
 NetworkGlobalFBGain = hslider("NetworkGlobalFBGain",1,0,10,.001) : si.smoo;
 ExternalSigGain = hslider("ExternalSigGain",0,0,10,.001) : si.smoo;
 FreqShift = hslider("FreqShift",1,0.001,2,.001) : si.smoo;
-SingleUnitInternalFBGain = hslider("SingleUnitInternalFBGain", 1000, .0, 10000, .001): si.smoo;
-Tan = hslider("tahn", 10, 1, 100, .001);
+Bandwidth = hslider("Bandwidth",1,1,10,.001) : si.smoo;
+SingleUnitInternalFBGain = hslider("SingleUnitInternalFBGain", 1, 0, 1, .001): si.smoo;
+Ktf = hslider("tahn", 10, 1, 100, .001);
 MUf = hslider("mu", .08, 0.01, 1.0, .001);
 OutputGain = hslider("OutputGain",1,0,1,.001) : si.smoo;
 
@@ -92,11 +93,11 @@ Qlist(index) = ba.take(index + 1, spectreband);
 // Filters in Cascade = O
 // Gain for each filters out = G
 // Bandpass Filter Banks
-filterbanks(O, B, G, S, x) = x <:par(i, B,
-                                seq(r, O, BPsvftpt( Qlist(i), 
-                                                    Flist(i) * S, 
+filterbanks(O, B, G, x) = x <:par(i, B,
+                                seq(r, O, BPsvftpt( Qlist(i) * Bandwidth, 
+                                                    Flist(i) * FreqShift, 
                                                     Alist(i)
-                                                    ) * G
+                                                    ) * G 
                                     )
                             ):> (+/B);
 //process = no.noise : filterbanks(3, 10, 36) <: _,_;
@@ -106,8 +107,8 @@ soloBP(O) = seq(r, O, BPsvftpt(  hslider("BW",50,1,20000,.001),
                     hslider("G",.8,0,1,.001) ) );
 //process = no.noise : soloBP(4);
 
-sinemap(S, x0) = ( circuit : tanf(Tan) : filterbanks(BPFilterOrder, 32, 10, S) * 
-                   SingleUnitInternalFBGain ) ~ _ : fi.dcblocker
+sinemap(x0) = (  circuit : tanf(Ktf) : filterbanks(BPFilterOrder, 32, 10000) : 
+                    fi.dcblocker ) ~ * (SingleUnitInternalFBGain)
             with {
                     circuit(x) =    (xInit-xInit')  + mu *
                         sin(ma.PI * ((x0) + (x)));
@@ -121,8 +122,7 @@ Network(NetV,ExternalSig) = loop ~ _ : (si.block(1), si.bus(NetV))
     with{
         loop(fb) =  par(i,  NetV,
                         ( ((ExternalSig/NetV) * ExternalSigGain) + ((fb * NetworkGlobalFBGain)@(SystemSpaceVar*(i+1))) :
-                           sinemap(1*FreqShift))
+                           sinemap)
                     ) <: (si.bus(NetV) :> +/NetV), (si.bus(NetV));
         };
-        
 process = _ : fi.dcblocker : Network(Voices) : par(i, Voices, _ * OutputGain);
