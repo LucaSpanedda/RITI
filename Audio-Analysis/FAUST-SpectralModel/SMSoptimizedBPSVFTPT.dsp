@@ -49,7 +49,11 @@ filterbanks(cascade, parallel, gglob, bwglob, fsglob, x) =
             ):> (+/parallel);
 
 // SMS Out
+// Import limiter
+normalize(treshold, x) = component("limiters.dsp").normalization(treshold, x);
 // 1st Order
-process =  no.noise : filterbanks(1, 128, 8, 1, 1) <: _,_;
+// process =   no.noise : filterbanks(1, 128, 10, 1, 1) : 
+//             normalize(1) <: _,_;
 // 2nd Order
-// process =  no.noise : filterbanks(2, 64, 1/6, 1, 1) <: _,_;
+process =   no.noise : filterbanks(2, 64, 1, 1, 1) : 
+            normalize(1) <: _,_;
