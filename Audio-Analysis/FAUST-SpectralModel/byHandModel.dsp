@@ -7,9 +7,9 @@ import("stdfaust.lib");
 
 // INSTRUMENT SPECTRE --------------------------------------
 // index of the lists
-Flist(index) = ba.take(index + 1,  ( 64,   129, 195, 261, 325, 391,  457,  520 ) );
-Alist(index) = ba.take(index + 1,  ( .05, .10,  .04, .08, .03, .007, .005, .008 ) );
-BWlist(index) = ba.take(index + 1, ( 1,    1,   1,   1,   1,   1,    1,    1   ) );
+Flist(index) = ba.take(index + 1,  ( 66, 129, 196, 261, 325, 390, 457, 520 ));  
+Alist(index) = ba.take(index + 1,  ( .8, 1.2, .50, .60, .30, .20, .04, .18 ));   
+BWlist(index) = ba.take(index + 1, ( 10, 8.0, 8.0, 6.0, 6.0, 10., 2.0, 10. ));   
 Voices = 8;
 
 //  BP FILTER ----------------------------------------------
@@ -48,5 +48,7 @@ filterbanks(cascade, parallel, gglob, bwglob, fsglob, x) =
 // Import limiter
 normalize(treshold, x) = component("limiters.dsp").normalization(treshold, x);
 // 1st Order
-process =   (no.noise : filterbanks(2, Voices, 1, 1, 1)) :
-             normalize(1) <: _,_;
+pulsexcit = ba.pulse(hslider("fpulse",10000,100,10000,.01)) : si.smoo * 200;
+noisexcit = no.noise * .1;
+process =   (noisexcit : filterbanks(2, Voices, 1, 1, 1))
+            <: _,_;
