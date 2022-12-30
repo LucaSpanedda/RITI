@@ -3,14 +3,16 @@ import matplotlib.pyplot as plt
 from scipy.io import wavfile as wav
 from scipy.fftpack import fft
 import numpy as np
+import argparse
 
 
-'''
-FFT CODE not sorted
-'''
-# import file audio
-audiofilein = input("Import wav audio file with extension: ")
-rate, data = wav.read(audiofilein)
+# Parse the command line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("audiofilein", help="Name of the audio file with the extension")
+args = parser.parse_args()
+
+# Read the audio file
+rate, data = wav.read(args.audiofilein)
 
 # Set start and end frequencies for plot
 start_freq = int(input("Analysis Start from Hz?: "))
