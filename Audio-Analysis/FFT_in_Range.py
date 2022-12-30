@@ -1,11 +1,13 @@
-'''
-FFT CODE not sorted
-'''
+# import libraries
 import matplotlib.pyplot as plt
 from scipy.io import wavfile as wav
 from scipy.fftpack import fft
 import numpy as np
 
+
+'''
+FFT CODE not sorted
+'''
 # import file audio
 audiofilein = input("Import wav audio file with extension: ")
 rate, data = wav.read(audiofilein)
@@ -17,7 +19,7 @@ end_freq = int(input("Analysis End at Hz?: "))
 bins = input("How much Bins for the FFT Analysis: ")
 bins = int(bins) # convert to integer
 
-N = int(bins) * 2 # usciranno 200 valori
+N = int(bins) * 2 # 2 times the bin values
 T = 1.0 / 44100.0
 xf = np.linspace(0.0, 1.0/(2.0*T), N//2)
 
@@ -92,17 +94,51 @@ sorted_amplitudes, sorted_frequencies = zip(*sorted_pairs)
 
 # Save sorted amplitudes to text file
 with open("sorted_amplitudes.txt", "w") as f:
-    for amplitude in sorted_amplitudes:
-        f.write(str(amplitude) + "\n")
+    for i, amplitude in enumerate(sorted_amplitudes):
+        if i == len(sorted_amplitudes) - 1:
+            f.write(str(amplitude))
+        else:
+            f.write(str(amplitude) + ",")
 
 # Save sorted frequencies to text file
 with open("sorted_frequencies.txt", "w") as f:
-    for frequency in sorted_frequencies:
-        f.write(str(frequency) + "\n")
+    for i, frequency in enumerate(sorted_frequencies):
+        if i == len(sorted_frequencies) - 1:
+            f.write(str(frequency))
+        else:
+            f.write(str(frequency) + ",")
 
-# Save bandwidth to text file
-with open("bandwidth.txt", "w") as f:
-    f.write(str(bandwidth))
+
+'''
+FAUST .dsp lists formatting part of the code
+'''
+# Read in amplitudes and frequencies from text files
+with open("sorted_amplitudes.txt") as f:
+    amplitudes_list = f.read().strip()
+
+with open("sorted_frequencies.txt") as f:
+    frequencies_list = f.read().strip()
+
+# Read in bandwidth from text file
+with open("bandwidth.txt") as f:
+    bandwidth = f.read().strip()
+
+# Save amplitudes and frequencies as .dsp files
+with open("amplitudes.dsp", "w") as f:
+    f.write("amplitudeslist = (\n")
+    for value in amplitudes_list.split(","):
+        f.write(value + "\n")
+    f.write(");")
+
+with open("frequencies.dsp", "w") as f:
+    f.write("frequencieslist = (\n")
+    for value in frequencies_list.split(","):
+        f.write(value + "\n")
+    f.write(");")
+
+# Save bandwidth as .dsp file
+with open("bandwidths.dsp", "w") as f:
+    f.write("bandwidthslist = (\n" + bandwidth + "\n);")
 
 
 '''
