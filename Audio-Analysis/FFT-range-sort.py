@@ -127,18 +127,18 @@ with open("bandwidth.txt") as f:
 with open("amplitudes.dsp", "w") as f:
     f.write("amplitudeslist = (\n")
     for value in amplitudes_list.split(","):
-        f.write(value + "\n")
-    f.write(");")
+        f.write(value + ",\n")
+    f.write(") ;")
 
 with open("frequencies.dsp", "w") as f:
     f.write("frequencieslist = (\n")
     for value in frequencies_list.split(","):
-        f.write(value + "\n")
-    f.write(");")
+        f.write(value + ",\n")
+    f.write(") ;")
 
 # Save bandwidth as .dsp file
 with open("bandwidths.dsp", "w") as f:
-    f.write("bandwidthslist = (\n" + bandwidth + "\n);")
+    f.write("bandwidthslist = (\n" + bandwidth + "\n) ;")
 
 
 '''
