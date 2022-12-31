@@ -14,6 +14,13 @@ args = parser.parse_args()
 # Read the audio file
 rate, data = wav.read(args.audiofilein)
 
+# Print the sample rate and length of the audio file in seconds
+print('''
+Sample rate:''', rate)
+print('''
+Length of audio file: {:.4f} seconds
+'''.format(len(data)/rate))
+
 # Set start and end frequencies for plot
 start_freq = int(input("Analysis Start from Hz?: "))
 end_freq = int(input("Analysis End at Hz?: "))
@@ -114,29 +121,34 @@ with open("sorted_frequencies.txt", "w") as f:
 '''
 FAUST .dsp lists formatting part of the code
 '''
-# Read in amplitudes and frequencies from text files
+# Read in amplitudes, frequencies, and bandwidth
+num_values = int(input("How many values do you want in the .dsp list? "))
+
 with open("sorted_amplitudes.txt") as f:
-    amplitudes_list = f.read().strip()
+    amplitudes = [float(line.strip()) for line in f.read().split(',')][:num_values]
 
 with open("sorted_frequencies.txt") as f:
-    frequencies_list = f.read().strip()
+    frequencies = [float(line.strip()) for line in f.read().split(',')][:num_values]
 
 # Read in bandwidth from text file
 with open("bandwidth.txt") as f:
     bandwidth = f.read().strip()
 
-# Save amplitudes and frequencies as .dsp files
-with open("amplitudes.dsp", "w") as f:
-    f.write("amplitudeslist = (\n")
-    for value in amplitudes_list.split(","):
-        f.write(value + ",\n")
-    f.write(") ;")
-
 with open("frequencies.dsp", "w") as f:
     f.write("frequencieslist = (\n")
-    for value in frequencies_list.split(","):
-        f.write(value + ",\n")
-    f.write(") ;")
+    for i in range(num_values):
+        if i == num_values - 1:
+            f.write(str(frequencies[i]) + ") ;")
+        else:
+            f.write(str(frequencies[i]) + ", ")
+
+with open("amplitudes.dsp", "w") as f:
+    f.write("amplitudeslist = (\n")
+    for i in range(num_values):
+        if i == num_values - 1:
+            f.write(str(amplitudes[i]) + ") ;")
+        else:
+            f.write(str(amplitudes[i]) + ", ")
 
 # Save bandwidth as .dsp file
 with open("bandwidths.dsp", "w") as f:
