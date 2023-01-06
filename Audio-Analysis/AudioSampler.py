@@ -42,11 +42,11 @@ while True:
     data_subset = data[start_indexSec:end_indexSec]
 
     # Create a temporary .wav file with the audio data, using the chunk counter in the file name
-    scipy.io.wavfile.write('chunk-' + str(chunk_counter) + '-' + args.audiofilein, rate, data_subset)
+    scipy.io.wavfile.write('chunk' + str(chunk_counter) + '_' + args.audiofilein, rate, data_subset)
 
     while True:
         # Play back the temporary .wav file
-        playsound('chunk-' + str(chunk_counter) + '-' + args.audiofilein)
+        playsound('chunk' + str(chunk_counter) + '_' + args.audiofilein)
 
         # Prompt the user for their choice
         choice = input("Enter 'R' to repeat the playback or 'N' to select a new portion of audio: ")

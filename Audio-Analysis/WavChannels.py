@@ -44,7 +44,7 @@ for i in range(data.shape[1]):
     channel_data = data[:, i]
 
     # Generate the output filename for the current channel
-    output_file = f'ch{i+1}-{args.input_file}'
+    output_file = f'ch{i+1}_{args.input_file}'
 
     # Write the audio data and sample rate to a .wav file for the current channel
     scipy.io.wavfile.write(output_file, rate, channel_data)
