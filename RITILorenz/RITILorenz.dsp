@@ -3,22 +3,34 @@ import("stdfaust.lib");
 // import audible ecosystemics objects library
 import("ritilib.lib");
 // Import lists: Frequencies, Amps, Bandwidth
-import("Cello1_D2.lib");
+import("Cello_D2.lib");
 
 
-// INSTRUMENT SPECTRE --------------------------------------
+// INSTRUMENT SPECTRES --------------------------------------
 // index of the lists
-FlistCH1(index) = ba.take(index, Cello1_D2_frequencies) * FREQUENCYf ;
-AlistCH1(index) = ba.take(index, Cello1_D2_amplitudes)  * 1 ;
-QlistCH1(index) = ba.take(1,     Cello1_D2_bandwidths)  * BANDWIDTHf ;
-// process = Flist(11), Flist(11), BWlist(11);
+
+// FlistCH1(index) = ba.take(index, Cello1_D2_frequencies) * FREQUENCYf ;
+// AlistCH1(index) = ba.take(index, Cello1_D2_amplitudes)  * 1 ;
+// QlistCH1(index) = ba.take(1,     Cello1_D2_bandwidths)  * BANDWIDTHf ;
+
+// FlistCH1(index) = ba.take(index, Cello2_D2_frequencies) * FREQUENCYf ;
+// AlistCH1(index) = ba.take(index, Cello2_D2_amplitudes)  * 1 ;
+// QlistCH1(index) = ba.take(1,     Cello2_D2_bandwidths)  * BANDWIDTHf ;
+
+// FlistCH1(index) = ba.take(index, Cello3_D2_frequencies) * FREQUENCYf ;
+// AlistCH1(index) = ba.take(index, Cello3_D2_amplitudes)  * 1 ;
+// QlistCH1(index) = ba.take(1,     Cello3_D2_bandwidths)  * BANDWIDTHf ;
+
+// FlistCH1(index) = ba.take(index, Cello4_D2_frequencies) * FREQUENCYf ;
+// AlistCH1(index) = ba.take(index, Cello4_D2_amplitudes)  * 1 ;
+// QlistCH1(index) = ba.take(1,     Cello4_D2_bandwidths)  * BANDWIDTHf ;
 
 // sliders for control the system
 TANHf = ( hslider("TANH", 1, 1, 100, .001) ) : si.smoo;
-FBf = 32 ^ hslider("EQ FEEDBACK", 0, -1, 1, .001) : si.smoo;
-DTf = ( hslider("DT", 0.62, 0, 1, .001)) : si.smoo;
+FBf = 2 ^ hslider("EQ FEEDBACK", 0, -1, 1, .001) : si.smoo;
+DTf = ( hslider("DT", 0.62, 0, 10, .001)) : si.smoo;
 SIGMAf = ( hslider("SIGMA", 8.2, 0, 100, .001)) : si.smoo;
-RHOf = ( hslider("RHO", 0.010, 0, 1, .001)) : si.smoo;
+RHOf = ( hslider("RHO", 0.010, 0, .1, .001)) : si.smoo;
 BETAf = ( hslider("BETA", 0.10, 0, 1, .001)) : si.smoo;
 BANDWIDTHf = 10 ^ hslider("BANDWIDTH", 0, -1, 1, .001) : si.smoo;
 FREQUENCYf = 16 ^ hslider("FREQUENCY", 0, -1, 1, .001) : si.smoo;
