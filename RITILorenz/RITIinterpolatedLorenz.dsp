@@ -39,13 +39,15 @@ Qlistinterpolate(index) = bilinInterpolate(
 DT1 = hslider("DT1", 0, 0, 1, .001) : si.smoo;
 DT2 = hslider("DT2", 0, 0, 1, .001) : si.smoo;
 TANHf = ( hslider("TANH", 1, 1, 100, .001) ) : si.smoo;
-FBf = 2 ^ hslider("EQ FEEDBACK", 0, -1, 1, .001) : si.smoo;
-DTf = ( hslider("DT", 0.62, 0, 10, .001)) : si.smoo;
+FBf = hslider("EQ FEEDBACK", 1, 1, 10, .001) : si.smoo;
+DTf = ( hslider("DT", 0.62, 0, 1, .001)) : si.smoo;
 SIGMAf = ( hslider("SIGMA", 8.2, 0, 100, .001)) : si.smoo;
 RHOf = ( hslider("RHO", 0.010, 0, .1, .001)) : si.smoo;
-BETAf = ( hslider("BETA", 0.10, 0, 1, .001)) : si.smoo;
+BETAf = ( hslider("BETA", 0.10, 0, 10, .001)) : si.smoo;
 BANDWIDTHf = 10 ^ hslider("BANDWIDTH", 0, -1, 1, .001) : si.smoo;
 FREQUENCYf = 16 ^ hslider("FREQUENCY", 0, -1, 1, .001) : si.smoo;
+DIRECTEQUATIONSf = ( hslider("DIRECTEQUATIONS", 0, 0, 1, .001)) : si.smoo;
+FILTEREDf = 1 - DIRECTEQUATIONSf;
 //process = BANDWIDTHf;
 
 //  BP FILTER ----------------------------------------------
@@ -69,7 +71,7 @@ BPSVF(glin, bw, cf, x) = loop ~ si.bus(2) : (! , ! , _)
     };
 
 // Spectre BP Filter Banks
-filterbank1(cascade, parallel, x) = 
+filterbank1(cascade, parallel, x) =
     x <: par(i, parallel,
             seq(r, cascade, 
                 BPSVF(  Alistinterpolate(i + 1) , 
@@ -77,7 +79,7 @@ filterbank1(cascade, parallel, x) =
                         Flistinterpolate(i + 1) 
                     ) 
                 )
-            ):> (+/parallel);
+            ):> (+/parallel) * FILTEREDf + x * DIRECTEQUATIONSf;
 
 // Autoregulating Lorenz System
 autolorenzL(in) = 
