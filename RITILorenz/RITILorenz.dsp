@@ -2,22 +2,27 @@
 import("stdfaust.lib");
 // import audible ecosystemics objects library
 import("ritilib.lib");
-
-Ktf = ( hslider("Tangent", 1, 1, 100, .001) ) : si.smoo;
-Fbf = ( hslider("Feedback", .990, -.990, 1, .001) + 1)/2 : si.smoo;
-Wtf = hslider("Peak Window Seconds", .1, .001, 1, .001) : si.smoo;
+// Import lists: Frequencies, Amps, Bandwidth
+import("Cello1_D2.lib");
 
 
 // INSTRUMENT SPECTRE --------------------------------------
-// Import lists: Frequencies, Amps, Bandwidth
-spectrefreq = component("frequencies.dsp").frequencieslist;
-spectreamps = component("amplitudes.dsp").amplitudeslist;
-spectreband = component("bandwidths.dsp").bandwidthslist;
 // index of the lists
-Flist(index) = ba.take(index, spectrefreq)  * 1.00 ;
-Alist(index) = ba.take(index, spectreamps)  * 1.00 ;
-BWlist(index) = ba.take(1, spectreband)     * 1 ;
+FlistCH1(index) = ba.take(index, Cello1_D2_frequencies) * FREQUENCYf ;
+AlistCH1(index) = ba.take(index, Cello1_D2_amplitudes)  * 1 ;
+QlistCH1(index) = ba.take(1,     Cello1_D2_bandwidths)  * BANDWIDTHf ;
 // process = Flist(11), Flist(11), BWlist(11);
+
+// sliders for control the system
+TANHf = ( hslider("TANH", 1, 1, 100, .001) ) : si.smoo;
+FBf = 32 ^ hslider("EQ FEEDBACK", 0, -1, 1, .001) : si.smoo;
+DTf = ( hslider("DT", 0.62, 0, 1, .001)) : si.smoo;
+SIGMAf = ( hslider("SIGMA", 8.2, 0, 100, .001)) : si.smoo;
+RHOf = ( hslider("RHO", 0.010, 0, 1, .001)) : si.smoo;
+BETAf = ( hslider("BETA", 0.10, 0, 1, .001)) : si.smoo;
+BANDWIDTHf = 10 ^ hslider("BANDWIDTH", 0, -1, 1, .001) : si.smoo;
+FREQUENCYf = 16 ^ hslider("FREQUENCY", 0, -1, 1, .001) : si.smoo;
+//process = BANDWIDTHf;
 
 //  BP FILTER ----------------------------------------------
 // optimized BP from the TPT version of the SVF Filter by Vadim Zavalishin
@@ -39,71 +44,59 @@ BPSVF(glin, bw, cf, x) = loop ~ si.bus(2) : (! , ! , _)
             };
     };
 
-
-// Spectre BP Filter Bank
-filterbanks(cascade, parallel, x) = 
+// Spectre BP Filter Banks
+filterbank1(cascade, parallel, x) = 
     x <: par(i, parallel,
-                            seq(r, cascade, BPSVF(
-                                            Alist(i + 1), 
-                                            BWlist(i + 1), 
-                                            Flist(i + 1) 
-                                            ) 
-                                )
+            seq(r, cascade, 
+                BPSVF( AlistCH1(i + 1), QlistCH1(i + 1), FlistCH1(i + 1) ) 
+                )
             ):> (+/parallel);
 
-// SMS Out
-// Import limiter
-normalize(treshold, x) = component("limiters.dsp").normalization(treshold, x);
-slidertest = si.smoo( ba.db2linear( hslider("Amp [unit:db]", -80, -80, 0, .001) ) );
-//process =   no.noise * slidertest * 10 : filterbanks(1, 128) <: _,_;
-
 // Autoregulating Lorenz System
-autolorenzL(in, dcfc, l, peakS, globalFB) = 
-    ( loop : par(i, 7, _ / (globalFB)) ) ~ si.bus(7) : 
-        par(i, 7, /(l * 2)) : (si.bus(3) :> _ / 3 : normalization(1) ), si.bus(4)
+autolorenzL(in) = 
+    ( loop : (( si.bus(3) : par(i, 3, _ * FBf) ), si.bus(4)) ) ~ si.bus(7) : 
+        par(i, 7, /(TANHf * 2)) : (si.bus(3) :> _ / 3 : normalization(1) ), si.bus(4)
 with {
         // saturator(lim,x) = lim*ma.tanh(x);
         saturator(lim,x) = lim * ma.tanh(x/(max(lim,ma.EPSILON)));
         dcblock(dcfc,x) = fi.highpass(1, dcfc, x);
         loop(x, y, z, sigma, dt, rho, beta) = 
  
-            filterbanks(1, 64, saturator(l, dcblock(10,((x+in) + sigma * ((y+in) - (x+in)) * dt))) ) , 
+            filterbank1(1, 32, saturator(TANHf, dcblock(10,((x+in) + sigma * ((y+in) - (x+in)) * dt))) ), 
             
-            filterbanks(1, 64, saturator(l, dcblock(10,((y+in) + (rho * (x+in) - (x+in) * z - (y+in)) * dt ))) ) ,  
+            filterbank1(1, 32, saturator(TANHf, dcblock(10,((y+in) + (rho * (x+in) - (x+in) * z - (y+in)) * dt ))) ),  
             
-            filterbanks(1, 64, saturator(l, dcblock(10,((z+in) + ((x+in) * (y+in) - beta * (z+in)) * dt ))) ) ,   
+            filterbank1(1, 32, saturator(TANHf, dcblock(10,((z+in) + ((x+in) * (y+in) - beta * (z+in)) * dt ))) ),   
 
-            ( ( z : peakHolder(peakS) : LPTPT(1) ) * 8.2), 
-            ( ( y : peakHolder(peakS) : LPTPT(1) ) * 0.60),
-            ( ( x : peakHolder(peakS) : LPTPT(1) ) * 0.001),
-            ( ( z : peakHolder(peakS) : LPTPT(1) ) * 0.10);
+            (SIGMAf), 
+            (DTf),
+            (RHOf),
+            (BETAf);
     };
 
-autolorenzR(in, dcfc, l, peakS, globalFB) = 
-    ( loop : par(i, 7, _ / (globalFB)) ) ~ si.bus(7) : 
-        par(i, 7, /(l * 2)) : (si.bus(3) :> _ / 3 : normalization(1) ), si.bus(4)
+autolorenzR(in) = 
+    ( loop : (( si.bus(3) : par(i, 3, _ * FBf) ), si.bus(4)) ) ~ si.bus(7) : 
+        par(i, 7, /(TANHf * 2)) : (si.bus(3) :> _ / 3 : normalization(1) ), si.bus(4)
 with {
         // saturator(lim,x) = lim * ma.tanh(x);
         saturator(lim,x) = lim*ma.tanh(x/(max(lim,ma.EPSILON)));
         dcblock(dcfc,x) = fi.highpass(1, dcfc, x);
         loop(x, y, z, sigma, dt, rho, beta) = 
  
-            filterbanks(1, 64, saturator(l, dcblock(10,((x+in) + sigma * ((y+in) - (x+in)) * dt))) ) , 
+            filterbank1(1, 32, saturator(TANHf, dcblock(10,((x+in) + sigma * ((y+in) - (x+in)) * dt))) ), 
             
-            filterbanks(1, 64, saturator(l, dcblock(10,((y+in) + (rho * (x+in) - (x+in) * z - (y+in)) * dt ))) ) ,  
+            filterbank1(1, 32, saturator(TANHf, dcblock(10,((y+in) + (rho * (x+in) - (x+in) * z - (y+in)) * dt ))) ),  
             
-            filterbanks(1, 64, saturator(l, dcblock(10,((z+in) + ((x+in) * (y+in) - beta * (z+in)) * dt ))) ) ,   
+            filterbank1(1, 32, saturator(TANHf, dcblock(10,((z+in) + ((x+in) * (y+in) - beta * (z+in)) * dt ))) ),   
 
-            ( ( z : peakHolder(peakS) : LPTPT(1) ) * 8.0), 
-            ( ( y : peakHolder(peakS) : LPTPT(1) ) * 0.62),
-            ( ( x : peakHolder(peakS) : LPTPT(1) ) * 0.01),
-            ( ( z : peakHolder(peakS) : LPTPT(1) ) * 0.10);
+            (SIGMAf), 
+            (DTf),
+            (RHOf),
+            (BETAf);
     };
 
-process = _ <:  \(mic1, mic2).
-    (
-        autolorenzL(mic1, 10, Ktf, Fbf, Wtf), 
-        autolorenzR(mic2, 10, Ktf, Fbf, Wtf)
-    ) : 
+process = 
+        ( autolorenzL(0.12-0.12'), 
+          autolorenzR(0.74-0.74') ) :
         \(xyz1, sigma1, dt1, rho1, beta1, xyz2, sigma2, dt2, rho2, beta2).
             (xyz1, xyz2, sigma1, dt1, rho1, beta1, sigma2, dt2, rho2, beta2);
