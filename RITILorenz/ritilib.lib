@@ -1,6 +1,7 @@
 // import faust standard library
 import("stdfaust.lib");
 
+
 //------------------------------------------------------------------ FILTERS ---
 // Zavalishin Onepole TPT Filter
 onePoleTPT(cf, x) = loop ~ _ : ! , si.bus(3) // Outs: lp , hp , ap
@@ -87,28 +88,3 @@ limitation(threshold, x) =
     ( x : peakHolder(.1) : LPTPT(500) : peakenvelope(10)) : 
     ( threshold / max(ma.EPSILON, _) : min(1.0) ) *
     ( x @ (ms2samp(1)));
-
-//----------------------------------------------------------- INTERPOLATIONS ---
-linInterpolate(x0, x1, delta) = x0 + delta * (x1-x0);
-siglinInterpol(order, x) = x : seq(r, order, interpolate)
-with{
-    interpolate(y) = y + .5 * (y' - y);
-};
-//process = os.phasor(1,100) : siglinInterpol(10) <: _,_;
-
-bilinInterpolate(x0, x1, x0b, x1b, dt1, dt2) = 
-    linInterpolate(
-        linInterpolate(x0, x1, dt1), 
-        linInterpolate(x0b, x1b, dt1),
-        dt2)
-    with{
-        linInterpolate(x0, x1, delta) = x0 + delta * (x1-x0);
-    };
-// dt1 = hslider("dt1",0,0,1,.001);
-// dTG2 = vslider("dt2",0,0,1,.001);
-// osc1 = (os.phasor(1,200) - .5) * 2;
-// osc2 = ((os.phasor(1,200) > .5) - .5) * 2;
-// osc3 = os.lf_triangle(200);
-// osc4 = os.osc(200);
-// process =   bilinInterpolate(osc1, osc2, osc3, osc4, dt1, dTG2) : 
-//             siglinInterpol(4, _) ;
