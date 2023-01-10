@@ -1,3 +1,10 @@
+// import faust standard library
+import("stdfaust.lib");
+
+
+// INSTRUMENT SPECTRES --------------------------------------
+// FFT analysis
+
 Cello1_D2_frequencies = (
 368.0, 221.0, 147.0, 515.0, 736.0, 74.0, 589.0, 810.0, 883.0, 295.0, 442.0, 662.0, 1693.0, 956.0, 1030.0, 2282.0, 1914.0, 1546.0, 1104.0, 1472.0, 2356.0, 2503.0, 2135.0, 1251.0, 1398.0, 1325.0, 1178.0, 2061.0, 2429.0, 2209.0, 1619.0, 2572.0, 1840.0, 2655.0, 1766.0, 2865.0) ; 
  
@@ -40,3 +47,54 @@ Cello4_D2_amplitudes = (
 Cello4_D2_bandwidths = (
 1.0
 ) ; 
+
+// INSTRUMENT SPECTRES --------------------------------------
+// index of the lists
+
+FrequenciesListCH1(index) = ba.take(index, Cello1_D2_frequencies) ;
+AmplitudesListCH1(index) = ba.take(index, Cello1_D2_amplitudes)  ;
+BandwidthsListCH1(index) = ba.take(1,     Cello1_D2_bandwidths)  ;
+
+FrequenciesListCH2(index) = ba.take(index, Cello2_D2_frequencies) ;
+AmplitudesListCH2(index) = ba.take(index, Cello2_D2_amplitudes)  ;
+BandwidthsListCH2(index) = ba.take(1,     Cello2_D2_bandwidths)  ;
+
+FrequenciesListCH3(index) = ba.take(index, Cello3_D2_frequencies) ;
+AmplitudesListCH3(index) = ba.take(index, Cello3_D2_amplitudes)  ;
+BandwidthsListCH3(index) = ba.take(1,     Cello3_D2_bandwidths)  ;
+
+FrequenciesListCH4(index) = ba.take(index, Cello4_D2_frequencies) ;
+AmplitudesListCH4(index) = ba.take(index, Cello4_D2_amplitudes)  ;
+BandwidthsListCH4(index) = ba.take(1,     Cello4_D2_bandwidths)  ;
+
+// INSTRUMENT SPECTRES --------------------------------------
+// interpolations
+
+// linear interpolation
+linInterpolate(x0, x1, delta) = x0 + delta * (x1-x0);
+siglinInterpol(order, x) = x : seq(r, order, interpolate)
+with{
+    interpolate(y) = y + .5 * (y' - y);
+};
+
+// bilinear interpolation
+bilinInterpolate(x0, x1, x0b, x1b, dt1, dt2) = 
+    linInterpolate(
+        linInterpolate(x0, x1, dt1), 
+        linInterpolate(x0b, x1b, dt1),
+        dt2)
+    with{
+        linInterpolate(x0, x1, delta) = x0 + delta * (x1-x0);
+    };
+
+// sliders for control the system
+DT1Interpolations = si.smoo( hslider("DT1Interpolations", 0, 0, 1, .001) );
+DT2Interpolations = si.smoo( hslider("DT2Interpolations", 0, 0, 1, .001) );
+FrequenciesListGlobalParam = si.smoo( hslider("FrequenciesListGlobalParam", 0, 0, 1, .001) );
+AmplitudesListGlobalParam = si.smoo( hslider("AmplitudesListGlobalParam", 1, 0, 1, .001) );
+BandwidthsListGlobalParam = si.smoo( hslider("BandwidthsListGlobalParam", 1, 0, 1, .001) );
+
+// lists interpolations
+FrequenciesListinterpolate(index) = bilinInterpolate(FrequenciesListCH1(index), FrequenciesListCH2(index), FrequenciesListCH3(index), FrequenciesListCH4(index), DT1Interpolations, DT2Interpolations);
+AmplitudesListinterpolate(index) = bilinInterpolate(AmplitudesListCH1(index), AmplitudesListCH2(index), AmplitudesListCH3(index), AmplitudesListCH4(index), DT1Interpolations, DT2Interpolations);
+BandwidthsListinterpolate(index) = bilinInterpolate(BandwidthsListCH1(index), BandwidthsListCH2(index), BandwidthsListCH3(index), BandwidthsListCH4(index), DT1Interpolations, DT2Interpolations);
