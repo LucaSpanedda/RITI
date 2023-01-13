@@ -7,62 +7,51 @@ import("Cello_D2.lib");
 
 
 // SYSTEM VARIABLES ----------------------------------------
+SystemSpaceVar = meterstoSamps(10);
 FilterOrder = 1;
 FilterPartials = 32;
 Voices = 4;
-SystemSpaceVar = 1 * ma.SR;
+
+NonLFreq = hslider("Nonlinearities Frequency", .1, 0., 1, .001) : si.smoo;
+NonLAmps = hslider("Nonlinearities Amplitude", 0., 0., 1, .001) : si.smoo;
+// process = ( _ <: (BIpolarnonlinearity(NonLFreq, 1, 100, NonLAmps), _) ), 
+//     ( _ <: (BIpolarnonlinearity(NonLFreq, 1, 100, NonLAmps), _) );
+
+// Filterbanks Controls
+DT1Interpolations = si.smoo( hslider("DT1Interpolations", 0, 0, 1, .001) );
+DT2Interpolations = si.smoo( hslider("DT2Interpolations", 0, 0, 1, .001) );
+BANDWIDTHf = 10 ^ hslider("BANDWIDTH", 0, -1, 1, .001) : si.smoo;
+FREQUENCYf = 16 ^ hslider("FREQUENCY", 0, -1, 1, .001) : si.smoo;
 
 FBf = hslider("Network Feedback / Lorenz Feedback", 10, 0, 10, .001) : si.smoo;
 NetworkGlobalFBGain = 10 - FBf;
-ExternalSigGain = hslider("ExternalSigGain",0,0,1000,.001) : si.smoo;
+MicsGain = hslider("MicsGain",0,0,1000,.001) : si.smoo;
 FreqShift = hslider("FreqShift",1,0.001,2,.001) : si.smoo;
 Bandwidth = hslider("Bandwidth",1,1,10,.001) : si.smoo;
 SingleUnitInternalFBGain = hslider("SingleUnitInternalFBGain", 1, 0, 1, .001): si.smoo;
 MUf = hslider("mu", .08, 0.01, 1.0, .001);
-OutputGain = hslider("OutputGain",1,0,1,.001) : si.smoo;
 TANHf = ( hslider("TANH", 1, 1, 100, .001) ) : si.smoo;
 DTf = ( hslider("DT", 0.62, 0, 1, .001)) : si.smoo;
 SIGMAf = ( hslider("SIGMA", 8.2, 0, 100, .001)) : si.smoo;
 RHOf = ( hslider("RHO", 0.010, 0, .1, .001)) : si.smoo;
 BETAf = ( hslider("BETA", 0.10, 0, 10, .001)) : si.smoo;
-BANDWIDTHf = 10 ^ hslider("BANDWIDTH", 0, -1, 1, .001) : si.smoo;
-FREQUENCYf = 16 ^ hslider("FREQUENCY", 0, -1, 1, .001) : si.smoo;
+
 DIRECTEQUATIONSf = ( hslider("DIRECTEQUATIONS", 0, 0, 1, .001)) : si.smoo;
 FILTEREDf = 1 - DIRECTEQUATIONSf;
-
-//  BP FILTER ----------------------------------------------
-// optimized BP from the TPT version of the SVF Filter by Vadim Zavalishin
-// reference : (by Will Pirkle)
-// http://www.willpirkle.com/Downloads/AN-4VirtualAnalogFilters.2.0.pdf
-BPSVF(glin, bw, cf, x) = loop ~ si.bus(2) : (! , ! , _)
-    with {
-        g = tan(cf * ma.PI * ma.T);
-        Q = cf / max(ma.EPSILON, bw);
-        R = 1.0 / (Q + Q);
-        G = 1.0 / (1.0 + 2.0 * R * g + g * g);
-        loop(s1, s2) = u1 , u2 , bp * glin
-            with {
-                bp = (g * (x - s2) + s1) * G;
-                bp2 = bp + bp;
-                v2 = bp2 * g;
-                u1 = bp2 - s1;
-                u2 = v2 + s2;
-            };
-    };
 
 // Spectre BP Filter Banks
 BandpassFiltersBank(x) = x <: 
     par(i, FilterPartials, 
         seq(r, FilterOrder, 
             BPSVF( 
-                AmplitudesListinterpolate(i + 1), 
-                BandwidthsListinterpolate(i + 1), 
-                FrequenciesListinterpolate(i + 1) 
+                AmplitudesListinterpolate(  (i + 1), DT1Interpolations, DT2Interpolations), 
+                BandwidthsListinterpolate(  (i + 1), DT1Interpolations, DT2Interpolations) * BANDWIDTHf, 
+                FrequenciesListinterpolate( (i + 1), DT1Interpolations, DT2Interpolations) * FREQUENCYf
             ) 
         )
     ):> (+/FilterPartials) * FILTEREDf + x * DIRECTEQUATIONSf;
 
-lorenz(a,b,c) = loop ~ si.bus(3) : par(i, 3, /(TANHf)) :> _/3
+lorenz(a,b,c,d) = loop ~ si.bus(3) : par(i, 3, /(TANHf)) :> _/3
     with {
         x0 = 1.2;
         y0 = 1.3;
@@ -77,7 +66,7 @@ lorenz(a,b,c) = loop ~ si.bus(3) : par(i, 3, /(TANHf)) :> _/3
             onepole = + ~ *(pole);
             dcblockerout = _ : onezero : onepole;
         };
-        dt = 1;
+        dt = DTf;
         beta = BETAf;
         rho = RHOf;
         sigma = SIGMAf;
@@ -87,12 +76,31 @@ lorenz(a,b,c) = loop ~ si.bus(3) : par(i, 3, /(TANHf)) :> _/3
         ((c+z + (x * y - beta * z) * dt + z_init) : dcblocker(1, 0.995) : saturator(TANHf) : BandpassFiltersBank) * FBf;
     };
 
-Network(NetV,ExternalSig) = loop ~ _ : (si.block(1), si.bus(NetV))
+Network(NetV, Mic1, Mic2, Mic3, Mic4) = ( loop ~ _ : (si.block(1), si.bus(NetV)) ) : 
+    par(i, Voices, _ : normalization(1)) : par(i, Voices, _ * OutputGain * cntrlMicSum)
     with{
         loop(fb) =  par(i,  NetV,
-                        ( ((ExternalSig/NetV) * ExternalSigGain) + ((fb * NetworkGlobalFBGain)@(SystemSpaceVar*(i+1))) <:
+                        ( ((Mic1/NetV) * MicsGain) + ((fb * NetworkGlobalFBGain)@(SystemSpaceVar*(i+1))) <:
                            lorenz)
                     ) <: (si.bus(NetV) :> +/NetV), (si.bus(NetV));
+
+        cntrlMicSum = (1 - ((Mic1, Mic2, Mic3, Mic4) :> _ : peakHoldwDecay(.01, 10) : _ * CntrlMicGain)) :
+            limit(1, 0);
+
+        OutputGain =  
+            hgroup( "Mixer", 
+                hgroup( "Global Output Gain",  
+                    ( si.smoo( ba.db2linear( vslider("Global Output Gain [unit:db]", 0, -80, 80, .001) ) ) <:
+                        attach(_, VHmetersEnvelope(_) :vbargraph("VMGOG [unit:dB]", -80, 80 ) ) )
+                )
+            );
+        CntrlMicGain =  
+            hgroup( "Mixer", 
+                hgroup( "Automated Control Gain",  
+                    ( si.smoo( ba.db2linear( vslider("Automated Control Gain [unit:db]", -80, -80, 80, .001) ) ) <:
+                        attach(_, VHmetersEnvelope(_) :vbargraph("VMACG [unit:dB]", -80, 80 ) ) )
+                )
+            );
         };
-        
-process = _ : fi.dcblocker : Network(Voices) : par(i, Voices, _ : normalization(1) * OutputGain);
+              
+process = (_,_) : \(m1,m2).(m1, m2, m1@(meterstoSamps(2.0432)), m2@(meterstoSamps(2.4132))) : Network(Voices);
