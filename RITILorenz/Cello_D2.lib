@@ -87,14 +87,7 @@ bilinInterpolate(x0, x1, x0b, x1b, dt1, dt2) =
         linInterpolate(x0, x1, delta) = x0 + delta * (x1-x0);
     };
 
-// sliders for control the system
-DT1Interpolations = si.smoo( hslider("DT1Interpolations", 0, 0, 1, .001) );
-DT2Interpolations = si.smoo( hslider("DT2Interpolations", 0, 0, 1, .001) );
-FrequenciesListGlobalParam = si.smoo( hslider("FrequenciesListGlobalParam", 0, 0, 1, .001) );
-AmplitudesListGlobalParam = si.smoo( hslider("AmplitudesListGlobalParam", 1, 0, 1, .001) );
-BandwidthsListGlobalParam = si.smoo( hslider("BandwidthsListGlobalParam", 1, 0, 1, .001) );
-
 // lists interpolations
-FrequenciesListinterpolate(index) = bilinInterpolate(FrequenciesListCH1(index), FrequenciesListCH2(index), FrequenciesListCH3(index), FrequenciesListCH4(index), DT1Interpolations, DT2Interpolations);
-AmplitudesListinterpolate(index) = bilinInterpolate(AmplitudesListCH1(index), AmplitudesListCH2(index), AmplitudesListCH3(index), AmplitudesListCH4(index), DT1Interpolations, DT2Interpolations);
-BandwidthsListinterpolate(index) = bilinInterpolate(BandwidthsListCH1(index), BandwidthsListCH2(index), BandwidthsListCH3(index), BandwidthsListCH4(index), DT1Interpolations, DT2Interpolations);
+FrequenciesListinterpolate(index, dt1, dt2) = bilinInterpolate(FrequenciesListCH1(index), FrequenciesListCH2(index), FrequenciesListCH3(index), FrequenciesListCH4(index), dt1, dt2);
+AmplitudesListinterpolate(index, dt1, dt2) = bilinInterpolate(AmplitudesListCH1(index), AmplitudesListCH2(index), AmplitudesListCH3(index), AmplitudesListCH4(index), dt1, dt2);
+BandwidthsListinterpolate(index, dt1, dt2) = bilinInterpolate(BandwidthsListCH1(index), BandwidthsListCH2(index), BandwidthsListCH3(index), BandwidthsListCH4(index), dt1, dt2);
