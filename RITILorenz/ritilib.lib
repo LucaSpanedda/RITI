@@ -8,7 +8,8 @@ meterstoSamps(Meters) =  ((1000 / 343.1) * Meters) * (ma.SR / 1000);
 ms2samp(t) = (t/1000) * ma.SR;
 sec2samp(t) = t * ma.SR;
 limit(maxl,minl,x) = x : max(minl, min(maxl));
-
+vmeter(i, minx, maxx, x) = attach(x, x: vbargraph("chan %i[2]", minx, maxx));
+hmeter(i, minx, maxx, x) = attach(x, x: hbargraph("chan %i[2]", minx, maxx));
 VHmetersEnvelope = abs : max ~ -(1.0/ma.SR) : 
     max(ba.db2linear(-80)) : ba.linear2db;
 
@@ -97,8 +98,8 @@ with{
 };
 
 // peak-hold module with an exponential decay curve
-peakHoldwDecay(holdSeconds, decayT60, x) = x : 
-    peakHolder(holdSeconds) : LPTPT(500) : peakenvelope(decayT60);
+peakHoldwDecay(holdSeconds, frequencyCut, decayT60, x) = x : 
+    peakHolder(holdSeconds) : LPTPT(frequencyCut) : peakenvelope(decayT60);
 
 //------------------------------------------------------- LOOKAHEAD LIMITERS ---
 // reference :
@@ -110,29 +111,20 @@ peakHoldwDecay(holdSeconds, decayT60, x) = x :
 // reference :
 // https://www.hackaudio.com/digital-signal-processing/amplitude/peak-normalization/
 
-normalization(treshold, x) = treshold / ( x : peakHoldwDecay(.1, 10) ) *
+normalization(treshold, x) = treshold / ( x : peakHoldwDecay(.1, 500, 10) ) *
     x @ (( 2/1000 ) * ma.SR);
 
-limitation(threshold, x) = ( x : peakHoldwDecay(.1, 10) ) : 
+limitation(threshold, x) = ( x : peakHoldwDecay(.1, 500, 10) ) : 
     ( threshold / max(ma.EPSILON, _) : min(1.0) ) *
         ( x @ (ms2samp(1)));
 
 //------------------------------------------------------------- NONLINEARITY ---
-// Signal to NonPeriodic Waves
-nonlinearity(frequency, treshold, decayT60, x) = x : 
-    LPTPT(frequency) : LPTPT(frequency) : nonlinearityNorm(treshold, decayT60) <:
-    _, ( (_ + 1) / 2 )
-    with{
-        // Peak Normalization with T60 Decay
-        nonlinearityNorm(treshold, decayT60, x) = treshold / ( abs(x) <: loop ~ _ * rt60(decayT60) ) * x
-            with{
-                loop(y,z) = ( (y,z) : max);
-                rt60(t) = 0.001^((1/ma.SR)/t);
-            };
-    };
-
-BIpolarnonlinearity(frequency, treshold, decayT60, gainOut,  x) = 
-    nonlinearity(frequency, treshold, decayT60, x) : _ * gainOut, !;
-    
-UNIpolarnonlinearity(frequency, treshold, decayT60, gainOut, x) = 
-    nonlinearity(frequency, treshold, decayT60, x) : !, _ * gainOut;
+nonLinearity(y) = y : lowFreqNoise <: (nonlinearsig(exponent, ma.tanh(_ * normRMS)))
+with{
+    exponent = hslider("nonLinearSignals Exponent", 1, 1, 96, .001) : si.smoo;
+    refPeriod = 100 ^ hslider("nonLinearSignals Period", 0, -1, 1, .001) : si.smoo;
+    lowFreqNoise(x) = x : seq(i, 4, LPTPT(1.0 / refPeriod));
+    noiseRMS(x) = x * x : LPTPT(1.0 / (10.0 * refPeriod)) : sqrt;
+    normRMS(x) = 1.0 / max(ma.EPSILON, noiseRMS(x));
+    nonlinearsig(exponent, x) = ma.signum(x) * pow(abs(x), exponent);
+};

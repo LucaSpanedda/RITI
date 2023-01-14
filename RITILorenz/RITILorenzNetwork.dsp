@@ -14,9 +14,6 @@ Voices = 4;
 
 NonLFreq = hslider("Nonlinearities Frequency", .1, 0., 1, .001) : si.smoo;
 NonLAmps = hslider("Nonlinearities Amplitude", 0., 0., 1, .001) : si.smoo;
-// process = ( _ <: (BIpolarnonlinearity(NonLFreq, 1, 100, NonLAmps), _) ), 
-//     ( _ <: (BIpolarnonlinearity(NonLFreq, 1, 100, NonLAmps), _) );
-
 // Filterbanks Controls
 DT1Interpolations = si.smoo( hslider("DT1Interpolations", 0, 0, 1, .001) );
 DT2Interpolations = si.smoo( hslider("DT2Interpolations", 0, 0, 1, .001) );
@@ -30,7 +27,6 @@ FreqShift = hslider("FreqShift",1,0.001,2,.001) : si.smoo;
 Bandwidth = hslider("Bandwidth",1,1,10,.001) : si.smoo;
 SingleUnitInternalFBGain = hslider("SingleUnitInternalFBGain", 1, 0, 1, .001): si.smoo;
 MUf = hslider("mu", .08, 0.01, 1.0, .001);
-TANHf = ( hslider("TANH", 1, 1, 100, .001) ) : si.smoo;
 DTf = ( hslider("DT", 0.62, 0, 1, .001)) : si.smoo;
 SIGMAf = ( hslider("SIGMA", 8.2, 0, 100, .001)) : si.smoo;
 RHOf = ( hslider("RHO", 0.010, 0, .1, .001)) : si.smoo;
@@ -51,7 +47,7 @@ BandpassFiltersBank(x) = x <:
         )
     ):> (+/FilterPartials) * FILTEREDf + x * DIRECTEQUATIONSf;
 
-lorenz(a,b,c,d) = loop ~ si.bus(3) : par(i, 3, /(TANHf)) :> _/3
+lorenz(SaturationFactor, ExternalSignal) = loop ~ si.bus(3) : par(i, 3, /(SaturationFactor)) :> _/3
     with {
         x0 = 1.2;
         y0 = 1.3;
@@ -71,21 +67,31 @@ lorenz(a,b,c,d) = loop ~ si.bus(3) : par(i, 3, /(TANHf)) :> _/3
         rho = RHOf;
         sigma = SIGMAf;
         loop(x, y, z) = 
-        ((a+x + sigma * (y - x) * dt + x_init) : dcblocker(1, 0.995) : saturator(TANHf) : BandpassFiltersBank) * FBf, 
-        ((b+y + (rho * x - x * z - y) * dt + y_init) : dcblocker(1, 0.995) : saturator(TANHf) : BandpassFiltersBank) * FBf, 
-        ((c+z + (x * y - beta * z) * dt + z_init) : dcblocker(1, 0.995) : saturator(TANHf) : BandpassFiltersBank) * FBf;
+        (( (ExternalSignal / 3) + x + sigma * (y - x) * dt + x_init) : dcblocker(1, 0.995) : saturator(SaturationFactor) : BandpassFiltersBank) * FBf, 
+        (( (ExternalSignal / 3) + y + (rho * x - x * z - y) * dt + y_init) : dcblocker(1, 0.995) : saturator(SaturationFactor) : BandpassFiltersBank) * FBf, 
+        (( (ExternalSignal / 3) + z + (x * y - beta * z) * dt + z_init) : dcblocker(1, 0.995) : saturator(SaturationFactor) : BandpassFiltersBank) * FBf;
     };
 
 Network(NetV, Mic1, Mic2, Mic3, Mic4) = ( loop ~ _ : (si.block(1), si.bus(NetV)) ) : 
     par(i, Voices, _ : normalization(1)) : par(i, Voices, _ * OutputGain * cntrlMicSum)
     with{
         loop(fb) =  par(i,  NetV,
-                        ( ((Mic1/NetV) * MicsGain) + ((fb * NetworkGlobalFBGain)@(SystemSpaceVar*(i+1))) <:
-                           lorenz)
+                        ( ((Mic1/NetV) * MicsGain) + ((fb * NetworkGlobalFBGain)@(SystemSpaceVar*(i + 1))) <:
+                           lorenz(nonLinearSaturation + 1) )
                     ) <: (si.bus(NetV) :> +/NetV), (si.bus(NetV));
 
-        cntrlMicSum = (1 - ((Mic1, Mic2, Mic3, Mic4) :> _ : peakHoldwDecay(.01, 10) : _ * CntrlMicGain)) :
+        cntrlMicSum = (1 - ((Mic1, Mic2, Mic3, Mic4) :> _ : peakHoldwDecay(.1, .1, 10) : _ * CntrlMicGain)) :
             limit(1, 0);
+        
+        nonLinearSaturation = ( ( ( nonLinearity((Mic1 + Mic3) / 2) + 1 ) / 2 ) * NonLinearSaturationGain) : 
+            hgroup( "Mixer", hgroup( "Non Linear Saturation Gain", vmeter(100, 1, 10) ) );
+        
+        NonLinearSaturationGain =
+            hgroup( "Mixer", 
+                hgroup( "Non Linear Saturation Gain",  
+                    ( si.smoo( vslider("Non Linear Saturation Gain", 0, 0, 10, .001) ) )
+                )
+            );
 
         OutputGain =  
             hgroup( "Mixer", 
