@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<JUCERPROJECT id="L9dULy" name="RITI_AutonomousNetwork_fixedVersion" projectType="audioplug" version="1.0.0"
-              bundleIdentifier="com.grame.RITI_AutonomousNetwork_fixedVersion" includeBinaryInAppConfig="1"
-              buildVST="0" buildVST3="1" buildAU="1" buildAUv3="1" buildRTAS="0"
-              buildAAX="0" buildStandalone="1" pluginName="RITI_AutonomousNetwork_fixedVersion" pluginDesc="RITI_AutonomousNetwork_fixedVersion"
+<JUCERPROJECT id="L9dULy" name="RITI_AutonomousNetwork_fixedVersion" projectType="audioplug"
+              version="1.0.0" bundleIdentifier="com.grame.RITI_AutonomousNetwork_fixedVersion"
+              includeBinaryInAppConfig="1" buildVST="0" buildVST3="1" buildAU="1"
+              buildAUv3="1" buildRTAS="0" buildAAX="0" buildStandalone="1"
+              pluginName="RITI_AutonomousNetwork_fixedVersion" pluginDesc="RITI_AutonomousNetwork_fixedVersion"
               pluginManufacturer="GRAME" pluginManufacturerCode="Manu" pluginCode="7784"
               pluginChannelConfigs="" pluginIsSynth="0" pluginWantsMidiIn="1"
-              pluginProducesMidiOut="1" pluginIsMidiEffectPlugin="0"
-              pluginEditorRequiresKeys="0" pluginAUExportPrefix="RITI_AutonomousNetwork_fixedVersionAU"
-              pluginRTASCategory="" aaxIdentifier="com.grame.RITI_AutonomousNetwork_fixedVersion" pluginAAXCategory="2"
-              pluginFormats="buildAU,buildAUv3,buildVST3,buildStandalone"
+              pluginProducesMidiOut="1" pluginIsMidiEffectPlugin="0" pluginEditorRequiresKeys="0"
+              pluginAUExportPrefix="RITI_AutonomousNetwork_fixedVersionAU"
+              pluginRTASCategory="" aaxIdentifier="com.grame.RITI_AutonomousNetwork_fixedVersion"
+              pluginAAXCategory="2" pluginFormats="buildAU,buildAUv3,buildVST3,buildStandalone"
               displaySplashScreen="1" jucerFormatVersion="1" enableIAA="0"
-              pluginCharacteristicsValue="pluginProducesMidiOut,pluginWantsMidiIn">
+              pluginCharacteristicsValue="pluginWantsMidiIn,pluginProducesMidiOut">
   <MAINGROUP id="DIThxi" name="RITI_AutonomousNetwork_fixedVersion">
     <GROUP id="{3EA8B881-7A5A-9E29-6E83-82528C15E424}" name="Source">
       <FILE id="BecAMR" name="FaustPluginProcessor.cpp" compile="1" resource="0"
@@ -20,7 +21,7 @@
   </MAINGROUP>
   <EXPORTFORMATS>
     <XCODE_MAC targetFolder="Builds/MacOSX" extraCompilerFlags="-I /usr/local/include/ -DNVOICES=NUM_VOICES -DFAUSTFLOAT=float"
-               extraDefs="MIDICTRL " vstLegacyFolder="">
+               extraDefs="MIDICTRL ">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="RITI_AutonomousNetwork_fixedVersion"/>
         <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="RITI_AutonomousNetwork_fixedVersion"/>
@@ -65,33 +66,7 @@
         <MODULEPATH id="juce_osc" path="../../modules"/>
       </MODULEPATHS>
     </XCODE_IPHONE>
-    <VS2015 targetFolder="Builds/VisualStudio2015" vstLegacyFolder="" extraDefs="MIDICTRL "
-            extraCompilerFlags="-DNVOICES=NUM_VOICES -DFAUSTFLOAT=float">
-      <CONFIGURATIONS>
-        <CONFIGURATION name="Debug" winWarningLevel="4" generateManifest="1" winArchitecture="32-bit"
-                       isDebug="1" optimisation="1" targetName="RITI_AutonomousNetwork_fixedVersion"/>
-        <CONFIGURATION name="Release" winWarningLevel="4" generateManifest="1" winArchitecture="32-bit"
-                       isDebug="0" optimisation="3" targetName="RITI_AutonomousNetwork_fixedVersion"/>
-      </CONFIGURATIONS>
-      <MODULEPATHS>
-        <MODULEPATH id="juce_audio_utils" path="../../modules"/>
-        <MODULEPATH id="juce_opengl" path="../../modules"/>
-        <MODULEPATH id="juce_gui_extra" path="../../modules"/>
-        <MODULEPATH id="juce_gui_basics" path="../../modules"/>
-        <MODULEPATH id="juce_graphics" path="../../modules"/>
-        <MODULEPATH id="juce_events" path="../../modules"/>
-        <MODULEPATH id="juce_data_structures" path="../../modules"/>
-        <MODULEPATH id="juce_core" path="../../modules"/>
-        <MODULEPATH id="juce_audio_processors" path="../../modules"/>
-        <MODULEPATH id="juce_audio_plugin_client" path="../../modules"/>
-        <MODULEPATH id="juce_audio_formats" path="../../modules"/>
-        <MODULEPATH id="juce_audio_devices" path="../../modules"/>
-        <MODULEPATH id="juce_audio_basics" path="../../modules"/>
-        <MODULEPATH id="juce_osc" path="../../modules"/>
-      </MODULEPATHS>
-    </VS2015>
-    <LINUX_MAKE targetFolder="Builds/LinuxMakefile" extraDefs="MIDICTRL " extraCompilerFlags="-I /usr/local/include/ -DNVOICES=NUM_VOICES -DFAUSTFLOAT=float"
-                vstLegacyFolder="">
+    <LINUX_MAKE targetFolder="Builds/LinuxMakefile" extraDefs="MIDICTRL " extraCompilerFlags="-I /usr/local/include/ -DNVOICES=NUM_VOICES -DFAUSTFLOAT=float">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="RITI_AutonomousNetwork_fixedVersion"/>
         <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="RITI_AutonomousNetwork_fixedVersion"/>
@@ -137,7 +112,7 @@
         <MODULEPATH id="juce_osc" path="../../modules"/>
       </MODULEPATHS>
     </ANDROIDSTUDIO>
-    <VS2019 targetFolder="Builds/VisualStudio2019" vstLegacyFolder="" extraDefs="MIDICTRL "
+    <VS2019 targetFolder="Builds/VisualStudio2019" extraDefs="MIDICTRL "
             extraCompilerFlags="-DNVOICES=NUM_VOICES -DFAUSTFLOAT=float">
       <CONFIGURATIONS>
         <CONFIGURATION isDebug="1" name="Debug"/>
