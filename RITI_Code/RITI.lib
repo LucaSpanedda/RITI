@@ -9,11 +9,13 @@ import("Cello_D2.lib");
 meterstoSamps(Meters) =  ((1000 / 343.1) * Meters) * (ma.SR / 1000);
 ms2samp(t) = (t/1000) * ma.SR;
 sec2samp(t) = t * ma.SR;
-limit(maxl,minl,x) = x : max(minl, min(maxl));
-vmeter(i, minx, maxx, x) = attach(x, x: vbargraph("chan %i[2]", minx, maxx));
-hmeter(i, minx, maxx, x) = attach(x, x: hbargraph("chan %i[2]", minx, maxx));
-VHmetersEnvelope = abs : max ~ -(1.0/ma.SR) : 
-    max(ba.db2linear(-80)) : ba.linear2db;
+limit(maxl,minl,x) = x : max(minl, min(maxl)); 
+XYZinspect(i, x, y, z) = hgroup("NetworkVoice_%i[2]", (Xvmeter((i+1), 0, 1000, x), Yvmeter((i+1), 0, 1000, y), Zvmeter((i+1), 0, 1000, z)));
+Xvmeter(i, minx, maxx, x) = attach(x, x : peakenvelope(10) : vbargraph("X_%i[2] [style:numerical]", minx, maxx));
+Yvmeter(i, minx, maxx, y) = attach(y, y : peakenvelope(10) : vbargraph("Y_%i[2] [style:numerical]", minx, maxx));
+Zvmeter(i, minx, maxx, z) = attach(z, z : peakenvelope(10) : vbargraph("Z_%i[2] [style:numerical]", minx, maxx));
+Vmeter(i, minx, maxx, x) = attach(x, x : peakenvelope(10) : vbargraph("%i[2] [style:numerical]", minx, maxx));
+Hmeter(i, minx, maxx, x) = attach(x, x : peakenvelope(10) : hbargraph("%i[2] [style:numerical]", minx, maxx));
 
 //------------------------------------------ CHAOTIC EQUATIONS CONSTRICTIONS ---
 saturator(lim, x) = lim * ma.tanh(x / (max(lim, ma.EPSILON)));
@@ -87,7 +89,8 @@ BandpassFiltersBank(bypassFilter, filterPartials, filterOrder, globalFreq, globa
 onepoletau(tau, x) = fb ~ _ 
 with {  
     fb(y) = (1.0 - s) * x + s * y; 
-    s = ba.tau2pole(tau);
+    s = exp(-1.0/(tau * ma.SR));
+    //   tau = desired smoothing time constant in seconds
     };
     
 //---------------------------------------------------------------- ANALIZERS ---
