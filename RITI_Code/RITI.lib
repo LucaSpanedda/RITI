@@ -73,7 +73,7 @@ HPTPT(cf, x) = onePoleTPT(cf, x) : (! , _ , !);
 
 
 
-
+XYZinspect(i, x, y, z) = hgroup("NetworkVoice_%i[2]", (Xvmeter((i+1), 0, 1000, x), Yvmeter((i+1), 0, 1000, y), Zvmeter((i+1), 0, 1000, z)));
 // Spectre BP Filter Banks
 BandpassFiltersBank(bypassFilter, filterPartials, filterOrder, globalFreq, globalAmps, globalBW, interpolation1, interpolation2, x) = x <: 
     par(i, filterPartials, 
