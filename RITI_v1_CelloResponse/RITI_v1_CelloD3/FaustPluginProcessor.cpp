@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------
-name: "RITI_AutonomousNetwork_fixedVersion"
+name: "RITI_v1_CelloD3"
 Code generated with Faust 2.57.6 (https://faust.grame.fr)
 Compilation options: -a /usr/local/share/faust/juce/juce-plugin.cpp -lang cpp -i -scn base_dsp -es 1 -mcd 16 -uim -double -ftz 0
 ------------------------------------------------------------ */
@@ -16078,13 +16078,13 @@ class mydsp : public base_dsp {
 		m->declare("compile_options", "-a /usr/local/share/faust/juce/juce-plugin.cpp -lang cpp -i -scn base_dsp -es 1 -mcd 16 -uim -double -ftz 0");
 		m->declare("delays.lib/name", "Faust Delay Library");
 		m->declare("delays.lib/version", "0.1");
-		m->declare("filename", "RITI_AutonomousNetwork_fixedVersion.dsp");
+		m->declare("filename", "RITI_v1_CelloD3.dsp");
 		m->declare("maths.lib/author", "GRAME");
 		m->declare("maths.lib/copyright", "GRAME");
 		m->declare("maths.lib/license", "LGPL with exception");
 		m->declare("maths.lib/name", "Faust Math Library");
 		m->declare("maths.lib/version", "2.5");
-		m->declare("name", "RITI_AutonomousNetwork_fixedVersion");
+		m->declare("name", "RITI_v1_CelloD3");
 		m->declare("platform.lib/name", "Generic Platform Library");
 		m->declare("platform.lib/version", "0.3");
 		m->declare("signals.lib/name", "Faust Signal Routing Library");
@@ -22760,7 +22760,7 @@ class mydsp : public base_dsp {
 
 #ifdef FAUST_UIMACROS
 	
-	#define FAUST_FILE_NAME "RITI_AutonomousNetwork_fixedVersion.dsp"
+	#define FAUST_FILE_NAME "RITI_v1_CelloD3.dsp"
 	#define FAUST_CLASS_NAME "mydsp"
 	#define FAUST_COMPILATION_OPIONS "-a /usr/local/share/faust/juce/juce-plugin.cpp -lang cpp -i -scn base_dsp -es 1 -mcd 16 -uim -double -ftz 0"
 	#define FAUST_INPUTS 8
