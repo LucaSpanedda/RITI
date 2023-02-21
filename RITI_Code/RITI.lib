@@ -1,7 +1,7 @@
 // import faust standard library
 import("stdfaust.lib");
 // Import lists: Frequencies, Amps, Bandwidth
-import("Cello_D2.lib");
+import("SpectreLists.lib");
 
 
 //---------------------------------------------------------------- FUNCTIONS ---
@@ -9,6 +9,7 @@ import("Cello_D2.lib");
 meterstoSamps(Meters) =  ((1000 / 343.1) * Meters) * (ma.SR / 1000);
 ms2samp(t) = (t/1000) * ma.SR;
 sec2samp(t) = t * ma.SR;
+
 limit(maxl,minl,x) = x : max(minl, min(maxl)); 
 XYZinspect(i, x, y, z) = hgroup("NetworkVoice_%i[2]", (Xvmeter((i+1), 0, 1000, x), Yvmeter((i+1), 0, 1000, y), Zvmeter((i+1), 0, 1000, z)));
 Xvmeter(i, minx, maxx, x) = attach(x, x : peakenvelope(10) : vbargraph("X_%i[2] [style:numerical]", minx, maxx));
@@ -71,17 +72,14 @@ LPTPT(cf, x) = onePoleTPT(cf, x) : (_ , ! , !);
 // Highpass TPT
 HPTPT(cf, x) = onePoleTPT(cf, x) : (! , _ , !);
 
-
-
-XYZinspect(i, x, y, z) = hgroup("NetworkVoice_%i[2]", (Xvmeter((i+1), 0, 1000, x), Yvmeter((i+1), 0, 1000, y), Zvmeter((i+1), 0, 1000, z)));
 // Spectre BP Filter Banks
-BandpassFiltersBank(bypassFilter, directFilter, filterPartials, filterOrder, globalFreq, globalAmps, globalBW, interpolation1, interpolation2, x) = x <: 
+BandpassFiltersBank(bypassFilter, directFilter, filterPartials, filterOrder, globalFreq, globalAmps, globalBW, interpolation1, interpolation2, chngList1, chngList2, chngList3, chngList4, x) = x <: 
     par(i, filterPartials, 
         seq(r, filterOrder, 
-            BPSVF( 
-                AmplitudesListinterpolate(  (i + 1), interpolation1, interpolation2) * globalAmps, 
-                BandwidthsListinterpolate(  (i + 1), interpolation1, interpolation2) * globalBW, 
-                FrequenciesListinterpolate( (i + 1), interpolation1, interpolation2) * globalFreq
+            BPSVF(
+                AmplitudesListinterpolate( (i + 1), chngList1, chngList2, chngList3, chngList4, interpolation1, interpolation2) * globalAmps, 
+                BandwidthsListinterpolate( (i + 1), chngList1, chngList2, chngList3, chngList4, interpolation1, interpolation2) * globalBW, 
+                FrequenciesListinterpolate( (i + 1), chngList1, chngList2, chngList3, chngList4, interpolation1, interpolation2) * globalFreq
             ) 
         )
     ):> (+ / filterPartials) * directFilter + (x * bypassFilter);
