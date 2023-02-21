@@ -49,8 +49,6 @@ Interpolations2f(i) = TGroup((MixerGroup(FiltersGroup(TFreqsGroup(FreqsGroup(i+1
 Saturationf = TGroup((MixerGroup(LorenzFuncGroup(vslider("TanH [unit:TanH]", 50, 1, 100, .001))))) : onepoletau(2);
 LorenzFeedbackf = TGroup(MixerGroup(LorenzFuncGroup(vslider("Lorenz FB", 1, 0, 1, .001)))) : onepoletau(2);  
 OutputGainf = TGroup(((ba.db2linear(MixerGroup(InsOutsGroup(vslider("Master [unit:dB]", -80, -80, 0, .001))))) : \(x).( (x > ba.db2linear(-80)) * x ))) : onepoletau(2);
-HPfreqf = TGroup((MixerGroup(InsOutsGroup(vslider("HP frequency [unit:Hz]", 1, 1, 20000, 1))))) : onepoletau(2);
-LPfreqf = TGroup((MixerGroup(InsOutsGroup(vslider("LP frequency [unit:Hz]", 20000, 1, 20000, 1))))) : onepoletau(2);
 ExternalInputGainf = TGroup(((ba.db2linear(MixerGroup(InsOutsGroup(vslider("Externals [unit:dB]", -80, -80, 80, .001))))) : 
     \(x).( (x > ba.db2linear(-80)) * x ))) : onepoletau(2);
 
@@ -84,7 +82,7 @@ ModifiedLorenzSystem(x0, y0, z0, dt, beta, rho, sigma, bypassFilter, directFilte
 
 GlobalSystemNetwork(Mic1, Mic2, Mic3, Mic4) = 
     (NetworkLoop ~ _ : (si.block(1), si.bus(NetworkVoices))) : 
-            par(i, NetworkVoices, _ : HPTPT(HPfreqf) : LPTPT(LPfreqf) : normalization(1)) : 
+            par(i, NetworkVoices, _ : dcblocker(InitDCBlockzero, InitDCBlockpole) : normalization(1)) : 
                 par(i, NetworkVoices, _ * OutputGainf )
     with{    
         NetworkLoop(networkFeedback) =  par(i,  NetworkVoices, 
