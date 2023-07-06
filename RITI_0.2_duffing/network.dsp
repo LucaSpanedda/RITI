@@ -1,5 +1,5 @@
 import("stdfaust.lib");
-// Spectrums
+
 Partials = 32;
 Flist(0) = component("lists.dsp").C_SUL_TASTO_frequencies;
 Alist(0) = component("lists.dsp").C_SUL_TASTO_amplitudes;
@@ -11,8 +11,8 @@ Flist(3) = component("lists.dsp").A_SUL_TASTO_frequencies;
 Alist(3) = component("lists.dsp").A_SUL_TASTO_amplitudes;
 PrimesNL = component("lists.dsp").Primes;
 
-Network(N) = (netInsx : vecMx : oscs : apfs) ~ si.bus(N) 
-            //:par(i, N, LookaheadLimiter(.8, .1, 10) : HPTPT(10000))
+Network(N) = (netIn : oscs : apfs) ~ (vecMx) 
+             : par(i, N, LookaheadLimiter(.8, .1, 10))
 with{
     // Network
     vecOp(vectorsList, op) =
@@ -24,12 +24,13 @@ with{
         vecDim = outputs(vectorsList) / vecLen;
         vecLen = outputs(ba.take(1, vectorsList));
     };
-    netInsx = vecOp((si.bus(N) , si.bus(N)), +);
+    netIn = vecOp((si.bus(N) , si.bus(N)), +);
     vecMx = si.bus(N) <: par(i, N, (vecOp((si.bus(N), par(i, N, 1/N)), *) :> _@2000));
     // Duffing
     duffing_oscillator(i, in) = output
     with{
         saturator(lim, x) = lim * ma.tanh(x / (max(lim, ma.EPSILON)));
+        atanlimit = (atan * (1 / (ma.PI * .5)));
         dcblocker(zero, pole, x) = x : dcblockerout
             with{
                 onezero =  _ <: _, mem : _,* (zero) : -;
@@ -39,14 +40,15 @@ with{
         beta = si.smoo(vslider("h: Duffing /Mod",1, 0, 1, .001));
         alpha = 1;
         omega = 1000 ^ si.smoo(vslider("h: Duffing /Rate", 1, -1, 1, .001));
-        gain =  10000 ^ si.smoo(vslider("h: Duffing /Gain", 0, -1, 1, .001));
+        gain =  1000 ^ si.smoo(vslider("h: Duffing /Gain", 0, -1, 1, .001));
         interact = si.smoo(vslider("h: Duffing /Interactions",0, 0, 1, .001));
         delta = (1 - interact) + (in * interact); 
         T = omega/ma.SR : + ~ _;
         duffing(y, x) = - delta * y - alpha * (x ^ 3) - beta * cos(T) <: _, _;
-        filters(x) =    x * gain <: BPBANK(i, Partials, Flist(i), Alist(i)) :> 
-                        _ / Partials : saturator(1) : dcblocker(1, .995)
-        with {
+        filters(x) =    dcblocker(1, .995, x) * gain <: 
+                        BPBANK(i, Partials, Flist(i), Alist(i)) :> 
+                        _ / Partials : atanlimit
+        with {  
             BPBANK(i, N, Fl, Al, x) =  
                 ( x <: 
                 vecOp( ((Fl : par(i, N, _ * Fshift)), si.bus(N)), BPTPT(Bw) ) : 
