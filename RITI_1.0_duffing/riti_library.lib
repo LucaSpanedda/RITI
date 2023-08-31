@@ -294,18 +294,101 @@ map(minL, maxL, x) = x * (maxL - minL) + minL;
 ************************************************************************/
 
 // pseudo-random noise with linear congruential generator (LCG)
-noise(initSeed) = LCG ~ _ : (_ / m)
+noise(i_list) = LCG ~ _ : (_ / m)
 with{
     // initSeed = an initial seed value
     a = 18446744073709551557; // a large prime number, 
-        // such as 18446744073709551557
     c = 12345; // a small prime number, such as 12345
     m = 2 ^ 31; // 2.1 billion
     // linear_congruential_generator
     LCG(seed) = ((a * seed + c) + (initSeed - initSeed') % m);
+    initSeed = ba.take((i_list + 1), 
+        (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 
+        53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 
+        109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 
+        173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 
+        233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 
+        293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 
+        367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 
+        433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 
+        499, 503, 509, 521, 523, 541, 547, 557, 563, 569, 571, 
+        577, 587, 593, 599, 601)
+    );
 };
+// multi-noise 100 elements max.
+multinoise(N) = par(i, N, noise(i));
 
-multinoise(N) = par(i, N, noise(ba.take(i + 1, primes)));
+// SAH with Feedback in FrequencyModulation
+modSAH(minSec, maxSec, y) = out ~ _
+with{
+    ph(f, modf) = (f + modf : + ~ _ % ma.SR) / ma.SR;
+    trigger(x) = x < x';
+    minT = 1 / minSec;
+    maxT = 1 / maxSec;
+    iniTrig = 1 - 1';
+    out(x) = (minT, abs(x * (maxT - minT))) : ph : trigger : (_ + iniTrig, x, y) : selector;
+};
+// Multi-FMOD-SAH
+multimodSAH(N, minSec, maxSec) = par(i, N, modSAH(minSec, maxSec));
+//process = multinoise(8) : multimodSAH(8, .1, .2);
+
+// Mod Metro
+randomTrigger(i, minRangeSec, maxRangeSec) = out
+with{
+    equalTrigger(x) = (1 - (x == x')); 
+    out = noise(i) : modSAH(maxRangeSec, minRangeSec) : equalTrigger;
+};
+// multi random-Triggers
+multirndmTriggers(N, minRangeSec, maxRangeSec) = 
+    par(i, N, randomTrigger(i, minRangeSec, maxRangeSec));
+//process = multirndmTriggers(8, .1, 1);
+
+// SAH triggered by Dirac Impulse (1 - 1')
+SAH(trigger, y) = ((trigger, _, y) : selector) ~ _;
+
+// random Sample and Hold incoming signal in Input
+rndmSAH(i, interpolSec, minRangeSec, maxRangeSec, x) = 
+    (randomTrigger(i, minRangeSec, maxRangeSec), x) : SAH : secLine(interpolSec)
+with{
+    // Interpolation : Line in Seconds
+    secLine(sec, x) = x : ba.line(sec * ma.SR);
+};
+multirndmSAH(N, interpolSec, minRangeSec, maxRangeSec) =
+    par(i, N, rndmSAH(i, interpolSec, minRangeSec, maxRangeSec));
+//process = os.osc(123) <: multirndmSAH(8, 10, 5, 10);
+
+nonlinearSAH(i, interpolSec, minRangeSec, maxRangeSec) = 
+    rndmSAH(i, interpolSec, minRangeSec, maxRangeSec) : sine(0)
+with{
+    sine(offset, ph) = sin(ph * TWOPI + offset * TWOPI);
+};
+multinonlinearSAH(N, interpolSec, minRangeSec, maxRangeSec) =
+    par(i, N, nonlinearSAH(i, interpolSec, minRangeSec, maxRangeSec));
+//process = os.osc(123) <: multinonlinearSAH(8, 10, 5, 10);
+
+
+// Control Signal with Mod SAH
+CntrlSignals(Nistances, Ncontrols, interpolSec, minRangeSec, maxRangeSec) = 
+    par(i, Nistances, _ <: (_, 
+        par(k, Ncontrols, 
+            nonlinearSAH(k + (i * 10), interpolSec, minRangeSec, maxRangeSec) + biasFunction(k) : ma.tanh)
+        )
+    )
+with{
+    // Bias control
+    biasFunction(initBias) = vgroup("Controls", biasSlider(initBias)) : si.smoo
+    with{
+        biasSlider(0) = hslider("rate", 0, -10, 10, .001);
+        biasSlider(1) = hslider("frequency", 0, -10, 10, .001);
+        biasSlider(2) = hslider("interpolation", 0, -10, 10, .001);
+        biasSlider(3) = hslider("bandwidth", 0, -10, 10, .001);
+        biasSlider(4) = hslider("modulation", 0, -10, 10, .001);
+        biasSlider(5) = hslider("interactions", 0, -10, 10, .001);
+        biasSlider(6) = hslider("gains", 0, -10, 10, .001);
+    };
+};
+//process = CntrlSignals(4, 7, 10, 5, 10); 
+
 
 // Letrec Phasor
 phasorLetrec(f) = Xn
@@ -574,10 +657,6 @@ with {
 };
 // process = localMax(4);
 
-//---------------------------------------------------------- SAMPLE AND HOLD ---
-// SAH circuit
-SAH(ph, y) = \(FB).( selector( ph : \(x).(x < x'), FB, y ) )~ _ ;
-
 
 /************************************************************************
 ************************************************************************
@@ -623,6 +702,8 @@ with{
     ph1 = phasorLetrec(grainms * freqShift);
     // 180* 
     ph2 = ma.frac(.5 + ph1);
+    // SAH circuit
+    SAH(ph, y) = \(FB).( selector( ph : \(x).(x < x'), FB, y ) )~ _ ;
     // Buffer positions = Position in the Buffer + Grain Read
     pos1 = SAH(ph1, timePhase) + ph1*(ma.SR/grainms);
     pos2 = SAH(ph2, timePhase) + ph2*(ma.SR/grainms);
@@ -729,42 +810,8 @@ with {
     xAverageNormalisedSaturated = ma.tanh(xAverageNormalised);
     xAverageSign = ma.signum(xAverage);
 };
+multinoise(N) = par(i, N, noise(i));
 
-// Control Signal with Mod SAH
-cntrlSigSAH(range, lerpSec, slowrangeSec, fastrangeSec, initPH, initBias, x) = 
-    x * range : modSAH(slowrangeSec, fastrangeSec) : secLine(lerpSec) : 
-        (sine(initPH) + biasFunction) : ma.tanh
-with{
-    // Phasor with Modulo
-    phasor(f) = (f : + ~ _ % ma.SR) / ma.SR;
-    // Sine Osc Function
-    sine(offset, ph) = sin(ph * TWOPI + offset * TWOPI);
-    // binary selector 0 - 1
-    selector(sel, x, y) = ( x * (1 - sel) + y * (sel));
-    // Line in Seconds
-    secLine(sec, x) = x : ba.line(sec * ma.SR);
-    // SAH with Feedback in FrequencyModulation
-    modSAH(minSec, maxSec, y) = out ~ _
-    with{
-        ph(f, modf) = (f + modf : + ~ _ % ma.SR) / ma.SR;
-        trigger(x) = x < x';
-        minT = 1 / minSec;
-        maxT = 1 / maxSec;
-        iniTrig = 1 - 1';
-        out(x) = (minT, abs(x * (maxT - minT))) : ph : trigger : (_ + iniTrig, x, y) : selector;
-    };
-    biasFunction = vgroup("Controls", biasSlider(initBias)) : si.smoo
-    with{
-        biasSlider(0) = hslider("rate", 0, -10, 10, .001);
-        biasSlider(1) = hslider("frequency", 0, -10, 10, .001);
-        biasSlider(2) = hslider("interpolation", 0, -10, 10, .001);
-        biasSlider(3) = hslider("bandwidth", 0, -10, 10, .001);
-        biasSlider(4) = hslider("modulation", 0, -10, 10, .001);
-        biasSlider(5) = hslider("interactions", 0, -10, 10, .001);
-        biasSlider(6) = hslider("gains", 0, -10, 10, .001);
-    };
-};
-//process = os.osc(10) : cntrlSigSAH(.01, 1, 20, 10);
 
 // Neuron Based Control Signals
 Neurons(neuronsN, synapsesN, diffrangeSeck, x) = network
