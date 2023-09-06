@@ -1,0 +1,910 @@
+// Import the standard Faust Libraries
+import("stdfaust.lib");
+
+
+/************************************************************************
+************************************************************************
+- LISTS -
+************************************************************************
+************************************************************************/
+
+// prime numbers
+Primes = component("prime_numbers.dsp").primes;
+PrimesThousands = component("prime_numbers.dsp").primesThousands;
+
+// spectres
+Flist(0) = component("spectres_lists.dsp").C_SUL_TASTO_frequencies;
+Alist(0) = component("spectres_lists.dsp").C_SUL_TASTO_amplitudes;
+Flist(1) = component("spectres_lists.dsp").G_SUL_TASTO_frequencies;
+Alist(1) = component("spectres_lists.dsp").G_SUL_TASTO_amplitudes;
+Flist(2) = component("spectres_lists.dsp").D_SUL_TASTO_frequencies;
+Alist(2) = component("spectres_lists.dsp").D_SUL_TASTO_amplitudes;
+Flist(3) = component("spectres_lists.dsp").A_SUL_TASTO_frequencies;
+Alist(3) = component("spectres_lists.dsp").A_SUL_TASTO_amplitudes;
+
+        
+/************************************************************************
+************************************************************************
+- BASIC -
+************************************************************************
+************************************************************************/
+
+// constants values
+PI = ma.PI;
+TWOPI = 2.0 * PI;
+SR = ma.SR;
+EPS = ma.EPSILON;
+NY = SR / 2.0;
+T = 1.0 / SR;
+PIT = PI * T;
+TWOPIT = TWOPI * T;
+MS2T(t) = (t / 1000) * ma.SR;
+
+
+/************************************************************************
+************************************************************************
+- INTERPOLATIONS -
+************************************************************************
+************************************************************************/
+
+// select a point between multiple points
+selectN0(N,i) = selectN0X(N, i, selector0)
+with {
+    // binary selector 0 - 1
+    selector(sel, x, y) = ( x * (1 - sel) + y * (sel) );
+    selector0(i, j, x, y) = selector((i >= j), x, y);
+    selectN0X(N,i,sel) = S(N,0)
+        with {
+            S(1,offset) = _;
+             S(n,offset) = S(left, offset), S(right, offset+left) : sel(i, offset+left)
+                with {
+                    right = int(n/2);
+                    left  = n-right;
+                };
+        };
+};
+
+// interpolate multiple points
+lerpMulti(points, ph) = (1.0 - D) * selN0 + D * selN1
+    with {
+        intPart = int(ph * points);
+        D = ph * points - int(ph * points);
+        selN0 = selectN0(points, intPart + 0, si.bus(points));
+        selN1 = selectN0(points, intPart + 1, si.bus(points));
+    };
+
+
+/************************************************************************
+************************************************************************
+- LIMITERS AND SATURATORS -
+************************************************************************
+************************************************************************/
+
+// Hyperbolic Tangent Saturator
+saturator(lim, x) = lim * ma.tanh(x / (max(lim, ma.EPSILON)));
+
+// Arc Tangent Saturator
+atanlimit = (atan * (1 / (ma.PI * .5)));
+
+// Limit Function
+limit(maxl, minl, x) = max(minl, min(maxl, x));
+
+
+/************************************************************************
+************************************************************************
+- FILTERS -
+************************************************************************
+************************************************************************/
+
+// SVF TPT
+SVFTPT(Q, cf, x) = loop ~ si.bus(2) : (! , ! , _ , _ , _ , _ , _)
+    with {
+        g = tan(cf * ma.PI * ma.T);
+        R = 1.0 / (2.0 * Q);
+        G1 = 1.0 / (1.0 + 2.0 * R * g + g * g);
+        G2 = 2.0 * R + g;
+        loop(s1, s2) = u1 , u2 , lp , hp , bp * 2.0 * R , x - bp * 4.0 * R , bp
+            with {
+                hp = (x - s1 * G2 - s2) * G1;
+                v1 = hp * g;
+                bp = s1 + v1;
+                v2 = bp * g;
+                lp = s2 + v2;
+                u1 = v1 + bp;
+                u2 = v2 + lp;
+            };
+    };
+
+LPSVF(Q, cf, x) = SVFTPT(Q, cf, x) : (_ , ! , ! , ! , !);
+HPSVF(Q, cf, x) = SVFTPT(Q, cf, x) : (! , _ , ! , ! , !);
+// Normalized Bandpass SVF TPT
+BPSVF(Q, cf, x) = SVFTPT(Q, cf, x) : (! , ! , _ , ! , !);
+NotchSVF(Q, cf, x) = x - BPSVF(Q, cf, x);
+APSVF(Q, cf, x) = SVFTPT(Q, cf, x) : (! , ! , ! , _ , !);
+PeakingSVF(Q, cf, x) = LPSVF(Q, cf, x) - HPSVF(Q, cf, x);
+BP2SVF(Q, cf, x) = SVFTPT(Q, cf, x) : (! , ! , ! , ! , _);
+BPBWSVF(BW, CF, x) = BPSVF(limit(20000, EPS, (CF / BW)), CF, x);
+
+// Normalized Bandpass SVF TPT
+BPTPTN(bwshift, fshift, gshift, qf, cf, gf, x) = loop ~ si.bus(2) : (! , ! , _ * (gf * gshift))
+    with {
+        g = tan((cf * fshift) * ma.PI * ma.T);
+        R = 1.0 / (2.0 * (qf * bwshift));
+        G1 = 1.0 / (1.0 + 2.0 * R * g + g * g);
+        G2 = 2.0 * R + g;
+        loop(s1, s2) = u1 , u2 , bp * 2.0 * R
+            with {
+                hp = (x - s1 * G2 - s2) * G1;
+                v1 = hp * g;
+                bp = s1 + v1;
+                v2 = bp * g;
+                lp = s2 + v2;
+                u1 = v1 + bp;
+                u2 = v2 + lp;
+            };
+    };
+
+// Optimized Classic Bandpass SVF TPT
+BPTPTG(bwshift, fshift, gshift, qf, cf, gf, x) = loop ~ si.bus(2) : (! , ! , _ * (gf * gshift))
+with {
+    g = tan((cf * fshift) * ma.PI * (1.0/ma.SR));
+    Q = (cf * fshift) / max(ma.EPSILON, qf * bwshift);
+    R = 1.0 / (Q + Q);
+    G = 1.0 / (1.0 + 2.0 * R * g + g * g);
+    loop(s1, s2) = u1 , u2 , bp
+        with {
+            bp = (g * (x - s2) + s1) * G;
+            bp2 = bp + bp;
+            v2 = bp2 * g;
+            u1 = bp2 - s1;
+            u2 = v2 + s2;
+        };
+};
+//process = no.noise <:   (BPTPTG(1, 1, 1, 
+//            1000 ^ si.smoo(hslider("Q", 0, -1, 1, .001)), 
+//            si.smoo(hslider("F", 20, 20, 20000, 1)), 1)),
+//                        (BPTPTN(1, 1, 1, 
+//            si.smoo(hslider("Q2", 1, 1, 10000, .001)), 
+//            si.smoo(hslider("F", 20, 20, 20000, 1)), 1));
+
+BPBankLerp(Bands, Lists, BWshift, Fshift, Gshift, Phasor, x) = x <: 
+    (   bwLists(Bands, Lists, Phasor), 
+        lerpFreqLists(Bands, Lists, Phasor), 
+        lerpAmpsLists(Bands, Lists, Phasor), 
+        par(i, Bands, _)
+    ) : 
+    ro.interleave(Bands, 4) : par(i, Bands, /*BPTPTN*/BPTPTG(BWshift, Fshift, Gshift)) :> _ / Bands
+with {
+    lerpFreqLists(N, L, ph) = par(i, N, par(k, L, ba.take(1 + i, Flist(k))) <: lerpMulti(L, ph));
+    lerpAmpsLists(N, L, ph) = par(i, N, par(k, L, ba.take(1 + i, Alist(k))) <: lerpMulti(L, ph));
+    bwLists(N, L, ph) = par(i, N, 1);
+};
+//process = no.noise : BPBankLerp(32, 4, 
+//                        vslider("BW", 1, 0, 1, .001), 
+//                        vslider("F", 1, 0, 1, .001), 
+//                        vslider("G", 1, 0, 1, .001), 
+//                        vslider("LERP", 0, 0, 1, .001)
+//                    );
+
+// Info
+info(i, lower, upper) = 
+    _ <: _, vbargraph(" %i [style:numerical]", lower, upper) : attach;
+infoScale(i, lower, upper) = 
+    _ <: _, (_ * 1000 : vbargraph(" %i [style:numerical]", lower * 1000, upper * 1000)) : attach;
+
+// dB Meters
+dBMeters(N) = hgroup("Outputs", par(i, N, vmeter(i)))
+with {
+	vmeter(i, x) = attach(x, envelop(x) : vbargraph("chan %i[2][unit:dB]", -70, +5));
+	hmeter(i, x) = attach(x, envelop(x) : hbargraph("chan %i[2][unit:dB]", -70, +5));
+	envelop = abs : max ~ -(1.0/ma.SR) : max(ba.db2linear(-70)) : ba.linear2db;
+};
+
+// binary selector 0 - 1
+selector(sel, x, y) = ( x * (1 - sel) + y * (sel) );
+
+// index of the primes numbers
+primeNumbers(index) = ba.take(index , list)
+with{
+    list = primes;
+};
+
+
+/************************************************************************
+************************************************************************
+- OSCILLATORS -
+************************************************************************
+************************************************************************/
+
+// Duffing
+duffing_OSC_global(id, in) = out
+with{
+    // Filterbank Controls
+    bypass = si.smoo(vslider("h: Duffing /Filtered", 1, 0, 1, .001));
+    oppositebp = 1 - bypass;
+    Fqshift = 16 ^ si.smoo(vslider("h: Duffing /Pitch Shift", 0, -1, 1, .001));
+    Qbp = 100 ^ si.smoo(vslider("h: Duffing /Q", 0, -1, 1, .001));
+    Lerp = si.smoo(vslider("h: Duffing /Interpolation", 1, 0, 1, .001));
+    // Equations Controls
+    beta = si.smoo(vslider("h: Duffing /Mod",1, 0, 1, .001));
+    alpha = 1;
+    omega = 1000 ^ si.smoo(vslider("h: Duffing /Rate", 1, -1, 1, .001));
+    gain =  10000 ^ si.smoo(vslider("h: Duffing /Gain", 0, -1, 1, .001));
+    interact = si.smoo(vslider("h: Duffing /Interactions", 1, 0, 1, .001));
+    delta = (1 - interact) + (in * interact); 
+    T = omega/ma.SR : + ~ _;
+    duffing(y, x) = - delta * y - alpha * (x ^ 3) - beta * cos(T) <: _, _;
+    filters(x) = dcblocker(1, .995, x) * gain <: (_ * bypass : 
+        BPBankLerp(32, 4, Qbp, Fqshift, 1, Lerp)),_ * oppositebp :> atanlimit;
+    out = (duffing : (_, filters)) ~ si.bus(2) : !, _;
+};
+
+// Duffing
+duffing_OSC(id, in) = out
+with{
+    // Filterbank Controls
+    bypass = si.smoo(vslider("h: Duffing %id/Filtered", 1, 0, 1, .001));
+    oppositebp = 1 - bypass;
+    Fqshift = 16 ^ si.smoo(vslider("h: Duffing %id/Pitch Shift", 0, -1, 1, .001));
+    Qbp = 100 ^ si.smoo(vslider("h: Duffing %id/Q", 0, -1, 1, .001));
+    Lerp = si.smoo(vslider("h: Duffing %id/Interpolation", 1, 0, 1, .001));
+    // Equations Controls
+    beta = si.smoo(vslider("h: Duffing %id/Mod",1, 0, 1, .001));
+    alpha = 1;
+    omega = 1000 ^ si.smoo(vslider("h: Duffing %id/Rate", 1, -1, 1, .001));
+    gain =  10000 ^ si.smoo(vslider("h: Duffing %id/Gain", 0, -1, 1, .001));
+    interact = si.smoo(vslider("h: Duffing %id/Interactions", 1, 0, 1, .001));
+    delta = (1 - interact) + (in * interact); 
+    T = omega/ma.SR : + ~ _;
+    duffing(y, x) = - delta * y - alpha * (x ^ 3) - beta * cos(T) <: _, _;
+    filters(x) = dcblocker(1, .995, x) * gain <: (_ * bypass : 
+        BPBankLerp(32, 4, Qbp, Fqshift, 1, Lerp)),_ * oppositebp :> atanlimit;
+    out = (duffing : (_, filters)) ~ si.bus(2) : !, _;
+};
+
+duffing_autOSC(id, in, rate, frequency, interpol, bandwidth, mod, interactions, gains) = 
+    vgroup("Duffing %id", (duffing : (_, filters)) ~ si.bus(2) : !, _)
+with{
+    // Filterbank Controls
+    Fqshift = hgroup("frequency", frequency : biToUni : map(.1, 1) : infoScale(1, -2, 2)); 
+    Qbp = hgroup("Bandwidth ", 100 ^ bandwidth : info(1, -100, 100));
+    Lerp = hgroup("interpolation", interpol : biToUni : infoScale(1, -1, 1)); 
+    // Equations Controls
+    Beta = hgroup("modulation", mod: biToUni : infoScale(1, -1, 1));
+    Alpha = 1;
+    Omega = hgroup("rate", 500 ^ rate : infoScale(1, -500, 500)); 
+    Gain =  hgroup("gains", 1000 ^ gains : info(1, -1000, 1000)); 
+    Interact = hgroup("interactions", interactions : biToUni : infoScale(1, -1, 1));
+    Delta = (1 - Interact) + (in * Interact); 
+    T = Omega/ma.SR : + ~ _;
+    duffing(y, x) = - Delta * y - Alpha * (x ^ 3) - Beta * cos(T) <: _, _;
+    filters(x) = dcblocker(1, .995, x) * Gain : BPBankLerp(32, 4, Qbp, Fqshift, 1, Lerp) : atanlimit;
+};
+
+
+/************************************************************************
+************************************************************************
+- MAPPING -
+************************************************************************
+************************************************************************/
+
+// bipolar -1/+1 to unipolar 0/1 
+biToUni(x) = (x + 1) / 2;
+
+// accept 0/1 
+map(minL, maxL, x) = x * (maxL - minL) + minL;
+
+
+/************************************************************************
+************************************************************************
+- SIGNALS GENERATION -
+************************************************************************
+************************************************************************/
+
+// pseudo-random noise with linear congruential generator (LCG)
+noise(i_list) = LCG ~ _ : (_ / m)
+with{
+    // initSeed = an initial seed value
+    a = 18446744073709551557; // a large prime number, 
+    c = 12345; // a small prime number, such as 12345
+    m = 2 ^ 31; // 2.1 billion
+    // linear_congruential_generator
+    LCG(seed) = ((a * seed + c) + (initSeed - initSeed') % m);
+    initSeed = ba.take((i_list + 1), 
+        (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 
+        53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 
+        109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 
+        173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 
+        233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 
+        293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 
+        367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 
+        433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 
+        499, 503, 509, 521, 523, 541, 547, 557, 563, 569, 571, 
+        577, 587, 593, 599, 601)
+    );
+};
+// multi-noise 100 elements max.
+multinoise(N) = par(i, N, noise(i));
+
+// SAH with Feedback in FrequencyModulation
+modSAH(minSec, maxSec, y) = out ~ _
+with{
+    ph(f, modf) = (f + modf : + ~ _ % ma.SR) / ma.SR;
+    trigger(x) = x < x';
+    minT = 1 / minSec;
+    maxT = 1 / maxSec;
+    iniTrig = 1 - 1';
+    out(x) = (minT, abs(x * (maxT - minT))) : ph : trigger : (_ + iniTrig, x, y) : selector;
+};
+// Multi-FMOD-SAH
+multimodSAH(N, minSec, maxSec) = par(i, N, modSAH(minSec, maxSec));
+//process = multinoise(8) : multimodSAH(8, .1, .2);
+
+// Mod Metro
+randomTrigger(i, minRangeSec, maxRangeSec) = out
+with{
+    equalTrigger(x) = (1 - (x == x')); 
+    out = noise(i) : modSAH(maxRangeSec, minRangeSec) : equalTrigger;
+};
+// multi random-Triggers
+multirndmTriggers(N, minRangeSec, maxRangeSec) = 
+    par(i, N, randomTrigger(i, minRangeSec, maxRangeSec));
+//process = multirndmTriggers(8, .1, 1);
+
+// SAH triggered by Dirac Impulse (1 - 1')
+SAH(trigger, y) = ((trigger, _, y) : selector) ~ _;
+
+// random Sample and Hold incoming signal in Input
+rndmSAH(i, interpolSec, minRangeSec, maxRangeSec, x) = 
+    (randomTrigger(i, minRangeSec, maxRangeSec), x) : SAH : secLine(interpolSec)
+with{
+    // Interpolation : Line in Seconds
+    secLine(sec, x) = x : ba.line(sec * ma.SR);
+};
+multirndmSAH(N, interpolSec, minRangeSec, maxRangeSec) =
+    par(i, N, rndmSAH(i, interpolSec, minRangeSec, maxRangeSec));
+//process = os.osc(123) <: multirndmSAH(8, 10, 5, 10);
+
+nonlinearSAH(i, interpolSec, minRangeSec, maxRangeSec) = 
+    rndmSAH(i, interpolSec, minRangeSec, maxRangeSec) : sine(0)
+with{
+    sine(offset, ph) = sin(ph * TWOPI + offset * TWOPI);
+};
+multinonlinearSAH(N, interpolSec, minRangeSec, maxRangeSec) =
+    par(i, N, nonlinearSAH(i, interpolSec, minRangeSec, maxRangeSec));
+//process = os.osc(123) <: multinonlinearSAH(8, 10, 5, 10);
+
+
+// Control Signal with Mod SAH
+CntrlSignals(Nistances, Ncontrols, interpolSec, minRangeSec, maxRangeSec) = 
+    par(i, Nistances, _ <: (_, 
+        par(k, Ncontrols, 
+            nonlinearSAH(k + (i * 10), interpolSec, minRangeSec, maxRangeSec) + biasFunction(k) : ma.tanh)
+        )
+    )
+with{
+    // Bias control
+    biasFunction(initBias) = hgroup("System Bias", biasSlider(initBias)) : si.smoo
+    with{
+        biasSlider(0) = hslider("rate [style: knob]", 0, -10, 10, .001);
+        biasSlider(1) = hslider("frequency [style: knob]", 0, -10, 10, .001);
+        biasSlider(2) = hslider("interpolation [style: knob]", 0, -10, 10, .001);
+        biasSlider(3) = hslider("bandwidth [style: knob]", 0, -10, 10, .001);
+        biasSlider(4) = hslider("modulation [style: knob]", 0, -10, 10, .001);
+        biasSlider(5) = hslider("interactions [style: knob]", 0, -10, 10, .001);
+        biasSlider(6) = hslider("gains [style: knob]", 0, -10, 10, .001);
+    };
+};
+//process = CntrlSignals(4, 7, 10, 5, 10); 
+
+
+// Letrec Phasor
+phasorLetrec(f) = Xn
+letrec{
+    'Xn = (Xn + (f / ma.SR)) : frac;
+}
+with{
+    frac(x) = x-floor(x);
+};
+
+
+/************************************************************************
+************************************************************************
+- FILTERS -
+************************************************************************
+************************************************************************/
+
+//--------------------------------------------- ONEZERO FILTER (FIR of I° Order)
+// (g) = give amplitude 0-1(open-close) to the delayed signal 
+// (g) = +1 lowpass, (g) = -1 highpass
+ozf(g, x) = (x' * g), x :> +;
+
+//--------------------------------------- ONEPOLE FILTER (IIR of 1 sample delay)
+// only the pole section
+pole(g) = + ~ * (g);
+
+//--------------------------------------------------------------- ALLPASS FILTER
+// (t, g) = give: delay in samples, feedback gain 0-1
+apf(del, g, x) = x : (+ : _ <: @(del  - 1), *(g))~ *(-g) : mem, _ : + : _;
+
+// APF Time Variant
+sdelay(maxDelay, interpolationLen, delayLen, x) = 
+    loop ~ si.bus(4) : (! , ! , ! , ! , _)
+    with {
+        loop(lineState, incrState, lowerDelayState, upperDelayState) = 
+            line , incr , lowerDelay , upperDelay , output
+            with {
+                lowerReach = lineState == 0;
+                upperReach = lineState == 1;
+                lowerDelayChange = delayLen != lowerDelayState;
+                upperDelayChange = delayLen != upperDelayState;
+                incr = ba.if(   upperReach & upperDelayChange,
+                                -1.0 / interpolationLen,
+                                ba.if(  lowerReach & lowerDelayChange),
+                                        1.0 / interpolationLen,
+                                        incrState);
+                line = max(.0, min(1.0, lineState + incr));
+                lowerDelay = ba.if(upperReach, delayLen, lowerDelayState);
+                upperDelay = ba.if(lowerReach, delayLen, upperDelayState);
+                lowerDelayline = de.delay(maxDelay, lowerDelay, x) * (1.0 - line);
+                upperDelayline = de.delay(maxDelay, upperDelay, x) * line;
+                output = lowerDelayline + upperDelayline;
+            };
+    };
+
+allpassWerner(maxDel, intTime, del, g, x) = (loop : sdelay(maxDel, intTime, del - 1)) ~ _ : mem * D_g + x * g
+    with {
+        D_g = sqrt(1 - g * g);
+        loop(fb) = x * D_g - g * fb;
+    };
+
+AllpassWernerCascade(M, maxDel, intTime, d, g, x) = x : seq(i, M, allpassWerner(maxDel, intTime, d * (sqrt((i + 1) / M) - sqrt(i / M)), g));
+
+
+//------------------------------------------------------------------ ONEPOLE TPT
+// Zavalishin Onepole TPT Filter
+// TPT version of the One-Pole Filter by Vadim Zavalishin
+// reference : (by Will Pirkle)
+// http://www.willpirkle.com/Downloads/AN-4VirtualAnalogFilters.2.0.pdf
+onePoleTPT(cf, x) = loop ~ _ : ! , si.bus(3)
+    with {
+        g = tan(cf * ma.PI * ma.T);
+        G = g / (1.0 + g);
+        loop(s) = u , lp , hp , ap
+            with {
+            v = (x - s) * G; u = v + lp; lp = v + s; hp = x - lp; ap = lp - hp;
+            };
+    };
+
+// Lowpass  TPT
+LPTPT(cf, x) = onePoleTPT(cf, x) : (_ , ! , !);
+
+// Highpass TPT
+HPTPT(cf, x) = onePoleTPT(cf, x) : (! , _ , !);
+
+// Allpass TPT
+APTPT(cf, x) = onePoleTPT(cf, x) : (!, !, _);
+
+//-------------------------------------------------------------- BUTTERWORTH ---
+butterworthQ(order, stage) = qFactor(order % 2)
+    with {
+        qFactor(0) = 1.0 / (2.0 * cos(((2.0 * stage + 1) *
+        (ma.PI / (order * 2.0)))));
+        qFactor(1) = 1.0 / (2.0 * cos(((stage + 1) * (ma.PI / order))));
+    };
+
+LPButterworthN(1, cf, x) = LPTPT(cf, x);
+LPButterworthN(N, cf, x) = cascade(N % 2)
+    with {
+        cascade(0) = x : seq(i, N / 2, LPSVF(butterworthQ(N, i), cf));
+        cascade(1) = x : LPTPT(cf) : seq(i, (N - 1) / 2,
+        LPSVF(butterworthQ(N, i), cf));
+    };
+
+HPButterworthN(1, cf, x) = HPTPT(cf, x);
+HPButterworthN(N, cf, x) = cascade(N % 2)
+    with {
+        cascade(0) = x : seq(i, N / 2, HPSVF(butterworthQ(N, i), cf));
+        cascade(1) = x : HPTPT(cf) : seq(i, (N - 1) /
+        2, HPSVF(butterworthQ(N, i), cf));
+    };
+    
+//------------------------------------------------------------------- DC BLOCKER
+// https://ccrma.stanford.edu/~jos/fp/DC_Blocker.html
+dcblocker(zero, pole, x) = x : dcblockerout
+            with{
+                onezero =  _ <: _, mem : _,* (zero) : -;
+                onepole = + ~ * (pole);
+                dcblockerout = _ : onezero : onepole;
+            };
+
+
+/************************************************************************
+************************************************************************
+- AUDIO INFORMATION PROCESSING -
+************************************************************************
+************************************************************************/
+
+//----------------------------------------------------------------- MAX PEAK ---
+// references: 1, 2
+// Peak Max with IIR filter and max comparison
+peakmax(x) = loop ~_
+with{
+    loop(y) = abs(x) , y : max;
+};
+//process = _ : peakmax;
+
+//--------------------------------------------------- MAX PEAK NORMALIZATION ---
+// references: 5
+// Peak Max Normalization
+fixedNorm(x) = 1 / (x : loop ~ _) * x
+with{
+    loop(y,z) = ( (y, abs(z) ) : max);
+};
+//process = _ * .2 : fixedNorm;
+
+//--------------------------------------------------- PEAK ENVELOPE FOLLOWER ---
+peakenvelope(period, x) = loop ~ _
+    with {
+        loop(y) = max(abs(x), y * coeff);
+        twoPIforT = (2.0 * ma.PI) * (1.0 / ma.SR);
+        coeff = exp(-twoPIforT / max(EPS, period));
+    };
+
+// Peak envelope. with attack and decay
+peakEnvAttRel(att, rel, x) = peakenvelope(rel - att, x) : 
+    LPTPT(1.0 / max(EPS, att));
+
+//----------------------------------------- MOVING AVERAGE ENVELOPE FOLLOWER ---
+movingAverage(seconds, x) = x - x@(seconds * ma.SR) : 
+    fi.pole(1.0) / (seconds * ma.SR);
+//process = _ * 10 : movingAverage(1);
+
+//------------------------------------------------------- MOVING AVERAGE RMS ---
+movingAverageRMS(seconds, x) = sqrt(max(0, movingAverage(seconds, x ^ 2)));
+//process = movingAverageRMS(1);
+
+//-------------------------------------------------------------- PEAK HOLDER ---
+// holdTime in Seconds
+peakHolder(holdTime, x) = loop ~ si.bus(2) : ! , _
+with {
+    loop(timerState, outState) = timer , output
+    with {
+        isNewPeak = abs(x) >= outState;
+        isTimeOut = timerState >= (holdTime * ma.SR - 1);
+        bypass = isNewPeak | isTimeOut;
+        timer = ba.if(bypass, 0, timerState + 1);
+        output = ba.if(bypass, abs(x), outState);
+    };
+};
+
+
+//----------------------------------------------- ATTACK DECAY - RMS AVERAGE ---
+// references: 3
+RMS(att, rel, x) = loop ~ _ : sqrt
+    with {
+        loop(y) = (1.0 - coeff) * x * x + coeff * y
+            with {
+                attCoeff = exp(-2.0 * ma.PI * ma.T / att);
+                relCoeff = exp(-2.0 * ma.PI * ma.T / rel);
+                coeff = ba.if(abs(x) > y, attCoeff, relCoeff);
+            };
+    };
+
+
+//--------------------------------------------------------- DYNAMIC LIMITERS ---
+// lookahead limiter with: peakHolder, lowpass & peakenvelope
+// All the credits of the original version goes to Dario Sanfilippo 
+LookaheadLimiter(threshold, holdSec, decaySec, x) = 
+    (x : peakHolder(holdSec) : LPTPT(1/holdSec) : peakenvelope(decaySec)) : 
+        (min(1, threshold) / max(1, _)) * 
+            (x @ (holdSec * ma.SR)); 
+
+//------------------------------------------------------ DYNAMIC COMPRESSION ---
+dynamiComp(i, k, att, rel, exponent, x) = 
+vgroup("dynaComp %i", (x * scaling) : hgroup("out %i", infoScale(k, -100, 100)))
+    with {
+        complement(x) = 1.0 - x;
+        clipUni(x) = max(0.0, min(1.0, x));
+        scaling = ma.tanh(x) : peakEnvAttRel(att, rel) : 
+            clipUni : complement : pow(exponent : hgroup("exp %i", infoScale(k, -100, 100)));
+    };  
+
+
+//------------------------------------------------------------ PITCH TRACKER ---
+// averaging function with 2pi time constant; t is the averaging time in seconds
+avg(t, x) = y
+    letrec {
+        'y = x + alpha * (y - x);
+    }
+        with {
+            alpha = exp((-2.0 * ma.PI * ma.T) / t);
+        };
+
+// zero-crossing indicator function
+zeroCrossing(x) = (x * x') < 0;
+
+// zero-crossing rate
+zeroCrossingRate(t, x) = zeroCrossing(x) : avg(t);
+
+// pitch tracker as zero-crossing rate of self-regulating lowpassed inputs
+// we highpass the input to avoid infrasonic
+// components to affect the measurements
+// we then clip the lowpass cutoff to improve stability
+pitchTracker(t, x) = loop ~ _
+    with {
+        loop(y) = fi.lowpass(4, max(80, y), xHighpassed) :
+                  (zeroCrossingRate(t) * ma.SR * .5)
+            with {
+                xHighpassed = fi.highpass(1, 20, x);
+            };
+    };
+
+// Resonant Frequency Suppressor
+resonKill(bypass, T, Q, x) = out
+with{
+    FC = pitchTracker(T, x);
+    filter = x - BPSVF(Q, FC, x);
+    out = filter * (1 - bypass) + x * bypass;
+};
+
+
+//---------------------------------------------------------------- LOCAL MAX ---
+localMax(seconds, x) = loop ~ si.bus(4) : _ , ! , ! , !
+with {
+    loop(yState, timerState, peakState, timeInSamplesState) = 
+        y , timer , peak , timeInSamples
+    with {
+        timeInSamples = ba.if(reset + 1 - 1', limit(1000, 0, seconds) * 
+            ma.SR, timeInSamplesState);
+        reset = timerState >= (timeInSamplesState - 1);
+        timer = ba.if(reset, 1, timerState + 1);
+        peak = max(abs(x), peakState * (1.0 - reset));
+        y = ba.if(reset, peak', yState);
+    };
+};
+// process = localMax(4);
+
+
+/************************************************************************
+************************************************************************
+- READ & WRITE TABLES -
+************************************************************************
+************************************************************************/
+
+//-------------------------------------------- TIMESTRETCHING2 (OLA 2 HEADS) ---
+// Timestretcher - sum of the 2 Head Reads
+// Bufpos = 0 to 1 signals for the reads
+Stretcher(bufferMax, bufferSec, record, readSection, readOffset, readStretch, grainDims, i, jittin, freqShift, x) = 
+x <: head1 + head2 
+with{
+    offset = 2;
+    // tableMax = table Max Dimension - 10 Seconds
+    tableMax = 192000 * bufferMax + offset;
+    frac(x) = x-floor(x);
+    // read section
+    // stretchFactor - 0 Normal / 1 Extreme stretch (Freeze)
+        stretch = phasorLetrec( (1/bufferSec) - readStretch)
+            * readSection;
+    // Jitter Amount in the position for the reads
+    rnd = abs(noise((10667 * i) + 10667));
+    jitter = jittin * rnd;
+    // position in the Buffer for the Reads
+    cntrlRead = (readOffset + stretch) - jitter : frac;
+    // L = buffer dimension in seconds
+    L = ma.SR * bufferSec;
+    // Write index - ramp 0 to L
+    wIdx = offset + ((+(1) : %(L)) ~ _) * record : int; 
+    // <: vgroup("Write", attach(_, _/L : hbargraph(" %i [style:numerical]",0,1)));
+    buffer(p, x) = it.frwtable(3, tableMax, .0, wIdx, x, p);
+    // Hanning window Equation
+    hann(x) = sin(frac(x) * ma.PI) ^ 2.0;
+    // Grain in Milliseconds
+    grainms = 1 / grainDims : si.smoo;
+    // Position of the grain in the Buffer
+    bufPos = cntrlRead;
+    // <: vgroup("Read", attach(_, _ : hbargraph(" %i [style:numerical]",0,1)));
+    timePhase = offset + (bufPos * L);
+    // two Heads for the read
+    // 0°
+    ph1 = phasorLetrec(grainms * freqShift);
+    // 180* 
+    ph2 = ma.frac(.5 + ph1);
+    // SAH circuit
+    SAH(ph, y) = \(FB).( selector( ph : \(x).(x < x'), FB, y ) )~ _ ;
+    // Buffer positions = Position in the Buffer + Grain Read
+    pos1 = SAH(ph1, timePhase) + ph1*(ma.SR/grainms);
+    pos2 = SAH(ph2, timePhase) + ph2*(ma.SR/grainms);
+    // Windows + Buffer Reads
+    head1 = hann(ph1) * buffer(pos1);
+    head2 = hann(ph2) * buffer(pos2);
+};
+
+
+/************************************************************************
+************************************************************************
+- NETWORKS -
+************************************************************************
+************************************************************************/
+
+//----------------------------------------------------- VECTORIAL OPERATIONS ---
+// perform operations on an arbitrary number of vectors
+vecOp(vectorsList, op) =
+    vectorsList : seq(i, vecDim - 1, vecOp2D , vecBus(vecDim - 2 - i))
+    with {
+        vecBus(0) = par(i, vecLen, 0 : !);
+        vecBus(dim) = par(i, dim, si.bus(vecLen));
+        vecOp2D = ro.interleave(vecLen, 2) : par(i, vecLen, op);
+        vecDim = outputs(vectorsList) / vecLen;
+        vecLen = outputs(ba.take(1, vectorsList));
+    };
+
+//----------------------------------------------------------------- MATRIXES ---
+// vector FDN Matrix
+vecMx(N, list) = si.bus(N) <: par(i, N, (vecOp((si.bus(N), list), *) :> +));
+
+vecMatrix(N) = si.bus(N) <: par(i, N, (vecOp((si.bus(N), list(i+1)), *) :> +))
+with{
+    list(1) = 1, 0, 0, 0;
+    list(2) = 0, 1, 0, 0;
+    list(3) = 0, 0, 1, 0;
+    list(4) = 0, 0, 0, 1;
+    list(5) = 1, 0, 0, 0;
+    list(6) = 0, 1, 0, 0;
+    list(7) = 0, 0, 1, 0;
+    list(8) = 0, 0, 0, 1;
+};
+
+// fully connected FDN Matrix
+fullyconnectedMx(N) =  vecMx(N, par(i, N, 1));
+fullyconnectedMxNorm(N) =  vecMx(N, par(i, N, 1/N));
+fullyConnectedMXDel(N) = si.bus(N) <: par(i, N, (vecOp((si.bus(N), par(i, N, 1/N)), *) :> _@2000));
+
+// hadamard FDN Matrix
+butterfly(2) = si.bus(2) <: +, -;
+butterfly(N) = si.bus(N) <: ro.interleave(N/2,2), ro.interleave(N/2,2) : par(i, N/2, +), par(i, N/2, -);
+hadamard(2) = butterfly(2);
+hadamard(N) = butterfly(N) : (hadamard(N/2), hadamard(N/2));
+
+// Normalized hadamard FDN Matrix
+hadamardcoeff(N) = par(i, N, 1.0 / sqrt(N)); 
+hadamardNormalized(N) = vecOp((hadamard(N) , hadamardcoeff(N)), *);
+
+//----------------------------------------------------------------- NETWORKS ---
+FDNfullyconnected(N, D, G) = (vecOp((si.bus(N) , si.bus(N)), +) : 
+    vecOp((si.bus(N), par(i, N, D * ma.SR - 1)), @)) ~
+        (fullyconnectedMxNormalized(N));
+
+FDNhadamard(N, D, G) = (vecOp((si.bus(N) , si.bus(N)), +) : 
+    vecOp((si.bus(N), par(i, N, D * ma.SR - 1)), @)) ~
+        (hadamardNormalized(N));
+
+FDNsingleLoop(N, D, G) = (vecOp((si.bus(N) , si.bus(N)), +) : 
+    vecOp((si.bus(N), par(i, N, D * ma.SR - 1)), @)) ~ ro.crossNM(N-1, 1);
+
+FDNmatrix(N, D, G) = (vecOp((si.bus(N) , si.bus(N)), +) : 
+    vecOp((si.bus(N), par(i, N, D * ma.SR - 1)), @)) ~ (vectorMatrix(N))
+with{
+    vectorMatrix(N) = si.bus(N) <: 
+        par(i, N, (vecOp((si.bus(N), list(i+1)), *) :> +))
+    with{
+        list(1) = 1, 0, 0, 0;
+        list(2) = 0, 1, 0, 0;
+        list(3) = 0, 0, 1, 0;
+        list(4) = 0, 0, 0, 1;
+        list(5) = 1, 0, 0, 0;
+        list(6) = 0, 1, 0, 0;
+        list(7) = 0, 0, 1, 0;
+        list(8) = 0, 0, 0, 1;
+    };
+};
+
+
+/************************************************************************
+************************************************************************
+- NONLINEARITIES - 
+************************************************************************
+************************************************************************/
+
+// LP Based controlSignalProcessing
+controlSignalProcessing(i, k, exponent, responseTime, x) = 
+        xAverageSign * pow(abs(xAverageNormalisedSaturated) * .9, exponent) : 
+                os.osc : hgroup("Control Osc %i", infoScale(k, -1, 1)
+    )
+with {
+    xAverage = x : seq(i, 4, LPTPT(1.0 / responseTime));
+    xAverageRMS = xAverage * xAverage : seq(i, 4, LPTPT(1.0 / (10.0 * responseTime))) : sqrt;
+    xAverageNormalised = xAverage / max(EPS, xAverageRMS);
+    xAverageNormalisedSaturated = ma.tanh(xAverageNormalised);
+    xAverageSign = ma.signum(xAverage);
+};
+multinoise(N) = par(i, N, noise(i));
+
+
+// Neuron Based Control Signals
+Neurons(neuronsN, synapsesN, diffrangeSeck, x) = network
+with{
+    network = x : synapses(1, 1, 10, 5, .1 + diffrangeSeck) : neuronDistrib : 
+        par(i, neuronsN, neuronFunction(200 + i * synapsesN, i + 100));
+
+    synapses(range, lerpSec, slowrangeSec, fastrangeSec, diffrangeSec, x) = 
+        x <: par(i, synapsesN, 
+            cntrlSigSAH(range, lerpSec, slowrangeSec, fastrangeSec + (i * diffrangeSec), ph(i + 300))
+            )
+    with{
+        ph(i) = noise(ba.take(i, Primes)) : triggerSAH;
+    };
+
+    neuronDistrib = si.bus(synapsesN) <: si.bus(synapsesN * neuronsN);
+    activationFunction(x) = x : ma.tanh;
+    neuronWeights(neuronID) = vecOp((si.bus(synapsesN), weightsFunction(neuronID)), *) :> _;
+    neuronFunction(neuronID, biasID) = neuronWeights(neuronID), biasFunction(biasID) :> activationFunction;
+    biasFunction(biasID) = // noise(ba.take(biasID, Primes)) : triggerSAH + 
+        vgroup("Bias Controls", biasSlider(biasID)) : si.smoo
+    with{
+        biasSlider(100) = hslider("rate", 0, -10, 10, .001);
+        biasSlider(101) = hslider("frequency", 0, -10, 10, .001);
+        biasSlider(102) = hslider("interpolation", 0, -10, 10, .001);
+        biasSlider(103) = hslider("bandwidth", 0, -10, 10, .001);
+        biasSlider(104) = hslider("modulation", 0, -10, 10, .001);
+        biasSlider(105) = hslider("interactions", 0, -10, 10, .001);
+        biasSlider(106) = hslider("gains", 0, -10, 10, .001);
+    };
+    weightsFunction(neuronID) = par(i, synapsesN, noise(ba.take(i + 1 + (neuronID), Primes))) : 
+        par(i, synapsesN, triggerSAH : si.smoo);
+
+    triggerSAH(y) = out ~ _
+    with{
+        ph = button("trigger");
+        trigger = ph > ph';
+        iniTrig = 1@512 - 1@513;
+        out(x) = trigger : (_ + iniTrig, x, y) : selector;
+    };
+};
+//process = os.osc(10) : Neurons(8, 8, 0);
+
+
+//------------------------------------------------------- SAH DIFF INVERSION ---
+/*  Sample-and-hold signals whose slope changes sign over a certain 
+    period/ */
+SAHDiffInvertion(x) = loop ~ _
+    with {
+        loop(y) = ba.if(nonZeroDiff * nonZeroDiff' < .0, x, y);
+        nonZeroDiff = ba.sAndH(abs(diff(x)) > EPS, diff(x));
+        diff(x) = x - x';
+    };
+
+//----------------------------------------------------------- RELAY HYSTERON ---
+hysteron(alpha, beta, x) = loop ~ _
+    with {
+        loop(y) = ba.if(x < alpha, .0, ba.if(x > beta, 1.0, y));
+    };  
+
+
+/************************************************************************
+************************************************************************
+- POPULATION GROWTH MODEL (termic model) - 
+************************************************************************
+************************************************************************/
+
+//----------------------------------------------------------- ENERGY AVERAGE ---
+energy(xg, t, x) = avg(t, x * x * xg)
+with {
+    avg(t, x) = onepole(1.0 / t, x) : ba.selectn(3, 0);
+    onepole(cf, x) = loop ~ _ : ! , si.bus(3)
+    with {
+        g = tan(cf * PI * T);
+        G = g / (1.0 + g);
+        Ghp = 1.0 - G;
+        Gap = G + G - 1.0;
+        loop(s) = u , lp , hp , ap
+            with {
+                u = v + v + s;
+                v0 = x - s;
+                hp = Ghp * v0;
+                v = G * v0;
+                lp = v + s;
+                ap = lp - hp;
+            };
+    };
+};
