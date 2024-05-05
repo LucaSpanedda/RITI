@@ -14,3 +14,10 @@ The idea for the acronym RITI comes from a famous paper by Agostino Di Scipio, S
 In the version presented here, the analysis of some cello notes are used to influence the forced Duffing oscillators, 
 whose parameters are modified in real time by the performer exploring their transitions between the modal resonances of the instrument and the threshold of chaos.
 The system is in a semi-autonomous configuration, meaning that it is capable of autonomy and the action of the performer can potentially affect the behavior of the system during the course of the performance
+
+### compile for Linux with faust2alqt
+
+```
+git clone https://github.com/LucaSpanedda/RITI.git && cd RITI && faust2alqt -double RITI.dsp && ./RITI
+
+```
