@@ -152,25 +152,7 @@ bpSVFTPT(cf, bw, gf, x) = Q , CF , X : SVFTPT : (! , ! , ! , _ , !)
     };
 };
 // BP filters bank
-bpfiltersbank(N, PRGM, F, Q, G, S, x) = par(i, N, (((FrequenciesTable, int(PRGM * N)) : (_, _, _ + i) : rdtable) * F, Q, G, x) : bp(2)) :> LPTPT(S) / N;
-// SMS filters test
-//process = no.noise : hgroup("SMS Controls", vslider("change", 0, 0, 19, 1), 8 ^ si.smoo(vslider("frequency", 0, -1, 1, 0.0001)), si.smoo(vslider("bandwidth", 54, 1, 1000, 0.001)), si.smoo(vslider("gain", 1, 0, 200, 0.001)), si.smoo(vslider("smooth", 1000, 20, 20000, 1)), _) : bpfiltersbank(24) <: si.bus(2);
-
-// Duffing single voice test
-duffing_test(filtersN, preset, smooth, bandwidth, freqshift, gain, damping, mod, rate, ext) = out
-with{
-// Duffing Equation
-osc(duffY, duffX) = dy, duffX0, finalY
-    with{
-        finalY = bpfiltersbank(filtersN, preset, freqshift, bandwidth, gain, smooth, duffX);
-        //finalY = duffX * (gain * 0.01);
-        dt = (rate / SR : + ~ _ % (60 * rate));
-        dy = (finalY - (finalY * finalY * finalY)) - (damping * duffY) + mod * sin(dt);
-        duffX0 = atan(duffY + dy);
-    };
-out = (osc ~ si.bus(2) : (!, !, _ * 0.5));
-};
-//process = hgroup("voice_0", ((vslider("preset", 0, 0, 19, 1)), si.smoo(vslider("smooth", 1000, 20, 20000, 1)), si.smoo(vslider("bandwidth", 54, 1, 100, 0.0001)), 8 ^ si.smoo(vslider("frequency", 0, -1, 1, 0.0001)), si.smoo(vslider("gain", 82, 0, 200, 0.0001)), si.smoo(vslider("damping", 0.3, -0.999, 0.999, 0.0001)), si.smoo(vslider("mod", 4, 0, 10, 0.0001)), si.smoo(vslider("rate", 108, 5, 200, 0.0001)), _) : duffing_test(24)) <: si.bus(2);
+bpfiltersbank(N, Program, BPType, F, Q, G, S, x) = par(i, N, (((FrequenciesTable, int(Program * N)) : (_, _, _ + i) : rdtable) * F, Q, G, x) : bp(BPType)) :> LPTPT(S) / N;
 
 // Reverb (Keith Barr Allpass Loop)
 reverb(I, O, N, SEQ, parspace, start, KRT) = si.bus(I) <: 
@@ -302,7 +284,7 @@ with{
 Del(N) = par(i, N, _ @ (1000 - 1));
 
 // Controls Structure
-controls(ip, sm, bw, bpf, gain, damping, mod, rate) = vslider("Preset", ip, 0, 19, 1), vgroup("Smooth", sm), vgroup("BW", controlMap(4, 100, bw, _)), vgroup("BPF", controlMapexp(8, bpf, _)), vgroup("Gain", controlMap(0.1, 100, gain, _)), vgroup("Damping", controlMap(-0.999, 0.999, damping, _)), vgroup("Mod", controlMap(1, 9, mod, _)), vgroup("Rate", controlMap(20, 180, rate, _)), _, _;
+controls(ip, sm, bw, bpf, gain, damping, mod, rate) = vslider("Preset [style: knob]", ip, 0, 19, 1), vgroup("Smooth", sm), vgroup("BW", controlMap(4, 100, bw, _)), vgroup("BPF", controlMapexp(8, bpf, _)), vgroup("Gain", controlMap(0.1, 100, gain, _)), vgroup("Damping", controlMap(-0.999, 0.999, damping, _)), vgroup("Mod", controlMap(1, 9, mod, _)), vgroup("Rate", controlMap(20, 180, rate, _)), _, _;
 
 // Manual Controls
 fixedControls(IN) = ((hgroup("Global Control", si.smoo(vslider("REVERB [style: knob]", 0.2, 0, 1, .001)), si.smoo(vslider("SMOOTH [style: knob]", 1000, 20, 20000, 1)), si.smoo(vslider("BW [style: knob]", 0, -10, 10, 0.001)), si.smoo(vslider("BPF [style: knob]", 0, -10, 10, 0.001)), si.smoo(vslider("GAIN [style: knob]", 0, -10, 10, 0.001)), si.smoo(vslider("DAMPING [style: knob]", 0, -10, 10, 0.001)), si.smoo(vslider("MOD [style: knob]", 0, -10, 10, 0.001)), si.smoo(vslider("RATE [style: knob]", 0, -10, 10, 0.001)))), si.bus(IN));
@@ -316,12 +298,13 @@ mixerVoice(v) = hgroup("Ch%v", vol : vumeter)
     };
 
 // Osc Network Voice
-duffing(filtersN, preset, smooth, bandwidth, freqshift, gain, damping, mod, rate, netSig, micSig) = out
+duffing(filtersN, filterType, preset, smooth, bandwidth, freqshift, gain, damping, mod, rate, netSig, micSig) = out
 with{
-// Duffing Equation
+// Duffing Equation + Bandpass filters bank
 osc(duffY, duffX) = dy, duffX0, finalY
     with{
-        finalY = bpfiltersbank(filtersN, preset, freqshift, bandwidth, gain, smooth, duffX);
+        // finalY = duffX * (gain * 0.01); // function for bypass the BP filters bank
+        finalY = bpfiltersbank(filtersN, preset, filterType, freqshift, bandwidth, gain, smooth, duffX);
         dt = (rate / SR : + ~ _ % (60 * rate));
         dy = (finalY - (finalY * finalY * finalY)) - (ma.tanh(damping + netSig) * duffY) + mod * sin(dt + micSig);
         duffX0 = atan(duffY + dy);
@@ -330,7 +313,16 @@ out = osc ~ si.bus(2) : (!, !, _);
 };
 
 // Global Network
-Network(IN, N, Nfilters, Seed, reverbg, sm, bw, bpf, gain, damping, mod, rate) = si.bus(IN) <: (ro.interleave(N, 2) : hgroup("Mixer", par(i, N, hgroup("voice %i", si.bus(2) <: ((si.bus(2) :> _ : ControlSignalPath(6, Seed * (i + 1), 10, 20)), _, _) : controls(i, sm, bw, bpf, gain, damping, mod, rate) : duffing(Nfilters) : mixerVoice(i)))) : (reverb(N, N, 8, 2, 5, 10, reverbg))) ~ (ro.crossNM(N - 1, 1) : Del(N));
+Network(IN, N, Nfilters, FilterType, Seed, reverbg, sm, bw, bpf, gain, damping, mod, rate) = si.bus(IN) <: (ro.interleave(N, 2) : hgroup("Mixer", par(i, N, vgroup("Voice %i", si.bus(2) <: ((si.bus(2) :> _ : ControlSignalPath(6, Seed * (i + 1), 10, 20)), _, _) : controls(i, sm, bw, bpf, gain, damping, mod, rate) : duffing(Nfilters, FilterType) : mixerVoice(i)))) : (reverb(N, N, 8, 2, 5, 10, reverbg))) ~ (ro.crossNM(N - 1, 1) : Del(N));
 
-// Network Out
-process = vgroup("ROOM_IS_THE_INSTRUMENT", fixedControls(2) : Network(2, 8, 24, 15021995));
+
+//- Output Functions ----------------------------------------------------------
+
+// SMS filters test
+//process = no.noise : hgroup("SMS Controls", vslider("change", 0, 0, 19, 1), 8 ^ si.smoo(vslider("frequency", 0, -1, 1, 0.0001)), si.smoo(vslider("bandwidth", 54, 1, 1000, 0.001)), si.smoo(vslider("gain", 1, 0, 200, 0.001)), si.smoo(vslider("smooth", 1000, 20, 20000, 1)), _) : bpfiltersbank(24) <: si.bus(2);
+
+// Duffing single voice test
+//process = hgroup("voice_0", ((vslider("preset", 0, 0, 19, 1)), si.smoo(vslider("smooth", 1000, 20, 20000, 1)), si.smoo(vslider("bandwidth", 54, 1, 100, 0.0001)), 8 ^ si.smoo(vslider("frequency", 0, -1, 1, 0.0001)), si.smoo(vslider("gain", 82, 0, 200, 0.0001)), si.smoo(vslider("damping", 0.3, -0.999, 0.999, 0.0001)), si.smoo(vslider("mod", 4, 0, 10, 0.0001)), si.smoo(vslider("rate", 108, 5, 200, 0.0001)), _ * 0, _) : duffing(24, 1)) : _ * 0.5 <: si.bus(2);
+
+// Network output
+process = vgroup("ROOM_IS_THE_INSTRUMENT", fixedControls(2) : Network(2, 8, 24, 1, 15021995));
