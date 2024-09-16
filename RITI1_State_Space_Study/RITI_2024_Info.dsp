@@ -15,12 +15,12 @@ MS2T(t) = (t / 1000) * ma.SR;
 MAX = ma.MAX;
 
 // Mapping Functions
-info(i, lower, upper) = _ <: _, vbargraph(" %i [style:numerical]", lower, upper) : attach;
+info(i, lower, upper) = _ <: _, vbargraph("%i [style:numerical]", lower, upper) : attach;
 mapping(low, high, x) = x * (high - low) + low;
 uni2bi(x) = x * 2.0 - 1.0;
 bi2uni(x) = x * 0.5 + 0.5;
-controlMap(low, high, offset, x) = (mapping(low, high, bi2uni(ma.tanh(x + offset))));
-controlMapexp(exponent, offset, x) = (exponent ^ (ma.tanh(x + offset)));
+controlMap(id, low, high, offset, x) = vgroup("Osc", info(id, low, high, mapping(low, high, bi2uni(ma.tanh(x + offset)))));
+controlMapexp(id, exponent, offset, x) = vgroup("Osc", info(id, -exponent, exponent, exponent ^ (ma.tanh(x + offset))));
 
 // Spectrum - BP filters values
 FrequenciesTable = 
@@ -153,7 +153,7 @@ bpSVFTPT(cf, bw, gf, x) = Q , CF , X : SVFTPT : (! , ! , ! , _ , !)
     };
 };
 // BP filters bank
-bpfiltersbank(N, Program, BPType, F, Q, G, S, x) = par(i, N, (((FrequenciesTable, int(Program * N)) : (_, _, _ + i) : rdtable) * F, Q, G, x) : bp(BPType)) :> LPTPT(S) / N;
+bpfiltersbank(N, Program, BPType, F, Q, G, S, x) = par(i, N, (((FrequenciesTable, int(Program * N)) : (_, _, _ + i) : rdtable) * F, Q, G, x) : bp(BPType)) :> _ /* : LPTPT(S) */ / N;
 
 // Reverb (Keith Barr Allpass Loop)
 reverb(I, O, N, SEQ, parspace, start, KRT) = si.bus(I) <: 
@@ -285,37 +285,41 @@ with{
 Del(N) = par(i, N, _ @ (1000 - 1));
 
 // Controls Structure
-controls(ip, sm, bw, bpf, gain, damping, mod, rate) = vslider("Preset [style: knob] [midi:ctrl 6%ip]", ip, 0, 19, 1), vgroup("Smooth", sm), vgroup("BW", controlMap(30, 100, bw, _)), vgroup("BPF", controlMapexp(8, bpf, _)), vgroup("Gain", controlMap(0.1, 100, gain, _)), vgroup("Damping", controlMap(-0.999, 0.999, damping, _)), vgroup("Mod", controlMap(1, 9, mod, _)), vgroup("Rate", controlMap(20, 180, rate, _)), _, _;
+controls(ip, sm, bw, bpf, gain, damping, mod, rate) = vgroup("Mixer", hgroup("Filters Preset", vslider("%ip[style: knob] [midi:ctrl 6%ip]", ip, 0, 19, 1))), vgroup("Smooth", sm), hgroup("Status", vgroup("BW", controlMap(ip, 30, 100, bw, _)), vgroup("BPF", controlMapexp(ip, 8, bpf, _)), vgroup("Gain", controlMap(ip, 0.1, 0.9, gain, _)), vgroup("Damping", controlMap(ip, -0.999, 0.999, damping, _)), vgroup("Mod", controlMap(ip, 1, 9, mod, _)), vgroup("Rate", controlMap(ip, 20, 180, rate, _))), _, _;
 
 // Manual Controls
-fixedControls(IN) = ((hgroup("Global Control", si.smoo(vslider("REVERB [style: knob] [midi:ctrl 16]", 0.2, 0, 1, .001)), si.smoo(vslider("SMOOTH [style: knob] [midi:ctrl 17]", 1000, 20, 20000, 1)), si.smoo(vslider("BW [style: knob] [midi:ctrl 11]", 0, -10, 10, 0.001)), si.smoo(vslider("BPF [style: knob] [midi:ctrl 10]", 0, -10, 10, 0.001)), si.smoo(vslider("GAIN [style: knob] [midi:ctrl 13]", 0, -10, 10, 0.001)), si.smoo(vslider("DAMPING [style: knob] [midi:ctrl 12]", 0, -10, 10, 0.001)), si.smoo(vslider("MOD [style: knob] [midi:ctrl 14]", 0, -10, 10, 0.001)), si.smoo(vslider("RATE [style: knob] [midi:ctrl 15]", 0, -10, 10, 0.001)))), si.bus(IN));
+fixedControls(IN) = vgroup("Mixer", hgroup("Global Control", si.smoo(vslider("REVERB [style: knob] [midi:ctrl 16]", 0.2, 0, 1, .001)), si.smoo(vslider("SMOOTH [style: knob] [midi:ctrl 17]", 1000, 20, 20000, 1)), si.smoo(vslider("BW [style: knob] [midi:ctrl 11]", 0, -10, 10, 0.001)), si.smoo(vslider("BPF [style: knob] [midi:ctrl 10]", 0, -10, 10, 0.001)), si.smoo(vslider("GAIN [style: knob] [midi:ctrl 13]", 0, -10, 10, 0.001)), si.smoo(vslider("DAMPING [style: knob] [midi:ctrl 12]", 0, -10, 10, 0.001)), si.smoo(vslider("MOD [style: knob] [midi:ctrl 14]", 0, -10, 10, 0.001)), si.smoo(vslider("RATE [style: knob] [midi:ctrl 15]", 0, -10, 10, 0.001)), hgroup("Control Signal", si.smoo(vslider("MIN [style: knob] [midi:ctrl 18]", 10, 1, 60, 1)), si.smoo(vslider("MAX [style: knob] [midi:ctrl 19]", 20, 1, 60, 1))))), si.bus(IN);
 
 // Mixer
-mixerVoice(v) = hgroup("%v", vol : vumeter)
+mixerVoiceG(v) = hgroup("%v", vol)
     with{
-        vol		= * (vslider("%v [midi:ctrl %v]", -40, -80, 20, 0.1) : ba.db2linear : si.smoo);
-        vumeter(x) 	= attach(x, envelop(x) : vbargraph("dBv", 0, 1))
+        vol		= * (vslider("G [midi:ctrl %v]", -80, -80, 0, 0.1) + 80 : ba.db2linear : si.smoo);
+    }; 
+mixerVoiceV(v) = hgroup("%v", vumeter)
+    with{
+        vumeter(x) 	= attach(x, envelop(x) : vbargraph("V", 0, 1))
 		    with { envelop = abs : min(0.99) : max ~ -(1.0 / SR);};
-    };
+    }; 
 
 // Osc Network Voice
-duffing(filtersN, filterType, preset, smooth, bandwidth, freqshift, gain, damping, mod, rate, netSig, micSig) = out
+duffing(id, filtersN, filterType, preset, smooth, bandwidth, freqshift, gain, damping, mod, rate, netSig, micSig) = out
 with{
 // Duffing Equation + Bandpass filters bank
 osc(duffY, duffX) = dy, duffX0, finalY
     with{
         // finalY = duffX * (gain * 0.01); // function for bypass the BP filters bank
-        finalY = bpfiltersbank(filtersN, preset, filterType, freqshift, bandwidth, gain, smooth, lpsmooth(duffX));
+        duffXscaled = duffX * gain : vgroup("Mixer", hgroup("Channels", mixerVoiceG(id))); 
+        finalY = bpfiltersbank(filtersN, preset, filterType, freqshift, bandwidth, 1, smooth, duffXscaled);
         dt = (rate / SR : + ~ _ % (60 * rate));
         dy = (finalY - (finalY * finalY * finalY)) - (ma.tanh(damping + netSig) * duffY) + mod * sin(dt + micSig);
         duffX0 = atan(duffY + dy);
-        lpsmooth(x) = (x + x') * 0.5;
     };
-out = osc ~ si.bus(2) : (!, !, _);
+out = osc ~ si.bus(2) : (!, !, (_ : vgroup("Mixer", hgroup("Channels", mixerVoiceV(id)))));
 };
 
+
 // Global Network
-Network(IN, N, Nfilters, FilterType, Seed, reverbg, sm, bw, bpf, gain, damping, mod, rate) = si.bus(IN) <: (ro.interleave(N, 2) : hgroup("Mixer", par(i, N, vgroup("CH %i", si.bus(2) <: ((si.bus(2) :> _ : ControlSignalPath(6, Seed * (i + 1), 10, 20)), _, _) : controls(i, sm, bw, bpf, gain, damping, mod, rate) : duffing(Nfilters, FilterType) : mixerVoice(i)))) : (reverb(N, N, 8, 2, 5, 10, reverbg))) ~ (ro.crossNM(N - 1, 1) : Del(N));
+Network(IN, N, Nfilters, FilterType, Seed, reverbg, sm, bw, bpf, gain, damping, mod, rate, cntrlMin, cntrlMax) = si.bus(IN) <: (ro.interleave(N, 2) : (par(i, N, (si.bus(2) <: ((si.bus(2) :> _ : ControlSignalPath(6, Seed * (i + 1), cntrlMin, cntrlMax)), _, _) : controls(i, sm, bw, bpf, gain, damping, mod, rate) : duffing(i, Nfilters, FilterType)))) : (reverb(N, N, 8, 2, 5, 10, reverbg))) ~ (ro.crossNM(N - 1, 1) : Del(N));
 
 
 //- Output Functions ----------------------------------------------------------
@@ -327,4 +331,4 @@ Network(IN, N, Nfilters, FilterType, Seed, reverbg, sm, bw, bpf, gain, damping, 
 //process = hgroup("voice_0", ((vslider("preset", 0, 0, 19, 1)), si.smoo(vslider("smooth", 1000, 20, 20000, 1)), si.smoo(vslider("bandwidth", 54, 30, 100, 0.0001)), 8 ^ si.smoo(vslider("frequency", 0, -1, 1, 0.0001)), si.smoo(vslider("gain", 82, 0, 130, 0.0001)), si.smoo(vslider("damping", 0.3, -0.999, 0.999, 0.0001)), si.smoo(vslider("mod", 4, 0, 10, 0.0001)), si.smoo(vslider("rate", 108, 5, 200, 0.0001)), _ * 0, _) : duffing(24, 1)) : _ * 0.5 <: si.bus(2);
 
 // Network output
-process = vgroup("ROOM_IS_THE_INSTRUMENT", fixedControls(2) : Network(2, 8, 24, 1, 15021995));
+process = tgroup("ROOM_IS_THE_INSTRUMENT", fixedControls(2) : Network(2, 8, 24, 1, 15021995));
