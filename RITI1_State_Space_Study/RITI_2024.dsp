@@ -305,11 +305,10 @@ with{
 osc(duffY, duffX) = dy, duffX0, finalY
     with{
         // finalY = duffX * (gain * 0.01); // function for bypass the BP filters bank
-        finalY = bpfiltersbank(filtersN, preset, filterType, freqshift, bandwidth, gain, smooth, lpsmooth(duffX));
+        finalY = bpfiltersbank(filtersN, preset, filterType, freqshift, bandwidth, gain, smooth, duffX);
         dt = (rate / SR : + ~ _ % (60 * rate));
         dy = (finalY - (finalY * finalY * finalY)) - (ma.tanh(damping + netSig) * duffY) + mod * sin(dt + micSig);
         duffX0 = atan(duffY + dy);
-        lpsmooth(x) = (x + x') * 0.5;
     };
 out = osc ~ si.bus(2) : (!, !, _);
 };
