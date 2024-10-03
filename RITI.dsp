@@ -496,12 +496,7 @@ with{
 
 // SMS filters test
 /*
-process =   no.noise : hgroup("SMS Controls", vslider("change", 0, 0, 19, 1),
-            8 ^ smoocntrl(vslider("frequency", 0, -1, 1, 0.0001)),
-            smoocntrl(vslider("bandwidth", 54, 1, 1000, 0.001)),
-            smoocntrl(vslider("gain", 1, 0, 200, 0.001)),
-            smoocntrl(vslider("smooth", 1000, 20, 20000, 1)), _) :
-            bpfiltersbank(24) <: si.bus(2);
+process =   no.noise : bpfiltersbank(24, 1, 1, 1, 1000, 100, 1) <: si.bus(2);
 */
 
 // Duffing single voice test
@@ -510,11 +505,11 @@ process =   hgroup("voice_0", ((vslider("preset", 0, 0, 19, 1)),
             smoocntrl(vslider("smooth", 1000, 20, 20000, 1)),
             smoocntrl(vslider("bandwidth", 54, 30, 100, 0.0001)),
             8 ^ smoocntrl(vslider("frequency", 0, -1, 1, 0.0001)),
-            smoocntrl(vslider("gain", 82, 0, 130, 0.0001)),
+            1,
             smoocntrl(vslider("damping", 0.3, -0.999, 0.999, 0.0001)),
             smoocntrl(vslider("mod", 4, 0, 10, 0.0001)),
             smoocntrl(vslider("rate", 108, 5, 200, 0.0001)), _ * 0, _) :
-            duffing(24, 1)) : _ * 0.5 <: si.bus(2);
+            duffing(1, 24, 1)) : _ * 0.5 <: si.bus(2);
 */
 
 // Global Network
@@ -532,6 +527,8 @@ sm, bw, bpf, gain, damping, mod, rate) = si.bus(IN) <:
 par(id, N, mixerVoiceM) : par(id, N, mixerVoiceV(id + 1));
 
 // Network output
+///*
 process =   tgroup("ROOM_IS_THE_INSTRUMENT",
                 fixedControls(2) : Network(2, 8, 24, 1, 15021995)
             );
+//*/
