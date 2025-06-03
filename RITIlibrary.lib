@@ -1,0 +1,294 @@
+import("stdfaust.lib");
+
+// TPT OP Filter
+lptpt(cf, x) = loop ~ _ : ! , si.bus(3) : (_ , ! , !)
+with{
+    g = tan(cf * ma.PI * (1.0 / ma.SR));
+    G = g / (1.0 + g);
+    loop(s) = u , lp , hp , ap
+        with {
+        v = (x - s) * G; u = v + lp; lp = v + s; hp = x - lp; ap = lp - hp;
+        };
+};
+
+// BP filters bank
+bpfiltersbank(N, Program, F, Q, G) = _ <:
+    par(i, N, (((FrequenciesTable, int(Program * N)) : (_, _, _ + i) :
+    rdtable) * F, Q, G, _) : bandpassBiquad) :> _
+with{
+    // Robert Bristow-Johnson's BP Biquad Filter - Direct Form 1
+    bandpassBiquad(cf, bw, gf) = biquadFilter * lptpt(100, (cf > 0))
+    with {
+        biquadFilter =
+        _ * gf <: _, (mem  <: (_, mem)) : (_ * a0, _ * a1, _ * a2) :> _ :
+        ((_, _) :> _) ~ (_ <: (_, mem) : (_ * - b1, _ * - b2) :> _);
+        Fx = max(20, min(20000, lptpt(10, cf)));
+        Qx = max(ma.EPSILON, min(ma.MAX, lptpt(10, bw)));
+        K = tan(ma.PI * Fx / ma.SR);
+        norm = 1 / (1 + K / Qx + K * K);
+        a0 = K / Qx * norm;
+        a1 = 0;
+        a2 = - a0;
+        b1 = 2 * (K * K - 1) * norm;
+        b2 = (1 - K / Qx + K * K) * norm;
+    };
+    // Spectrum - BP filters values
+    FrequenciesTable =
+    waveform{
+    /* 01 */    97, 156, 186, 200, 243, 318, 333, 383, 435, 453, 495, 500, 598,
+                678, 687, 702, 720, 883, 1522, 1747, 1859, 1957, 1965, 2065,
+    /* 02 */    136, 185, 312, 402, 676, 765, 872, 1016, 1397, 1811, 2252, 2708,
+                3180, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    /* 03 */    242, 375, 513, 515, 859, 940, 1040, 1300, 1775, 2830, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    /* 04 */    205, 364, 455, 455, 455, 770, 770, 770, 876, 1158, 1310, 1590,
+                2062, 2549, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    /* 05 */    141, 222, 298, 298, 298, 298, 552, 758, 1041, 1345, 1578, 1671,
+                2000, 2341, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    /* 06 */    68, 97, 170, 248, 391, 449, 531, 589, 658, 711, 879, 771, 807,
+                1053, 1200, 1255, 1460, 1478, 1521, 1685, 1666, 1784, 1921, 1954,
+    /* 07 */    140, 150, 276, 285, 449, 693, 730, 854, 932, 979, 1417, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    /* 08 */    30, 60, 90, 122, 166, 201, 270, 293, 308, 490, 502, 953, 1337,
+                1664, 4515, 4686, 5767, 0, 0, 0, 0, 0, 0, 0,
+    /* 09 */    64, 98, 130, 163, 196, 227, 294, 327, 360, 393, 426, 459, 497,
+                526, 560, 594, 628, 664, 696, 732, 801, 908, 980, 1052,
+    /* 10 */    338, 875, 894, 1050, 1150, 1620, 1662, 1666, 1841, 1852, 2052,
+                2243, 2311, 2584, 2842, 2893, 2958, 2980, 3731, 4251, 4516, 4852,
+                0, 0,
+    /* 11 */    386.52, 389.92, 387.6, 392.95, 396.54, 399.91, 408.22, 411.38,
+                612.85, 619.66, 624.63, 625.6, 633.9, 633.58, 636.53, 640.57,
+                645.58, 648.5, 653.81, 656.25, 657.11, 662.2, 663.31, 665.58,
+    /* 12 */    1001.79, 1008.32, 1010.39, 1020.54, 1024.12, 1029.16, 1033.89,
+                257.87, 260.92, 263.89, 290.34, 290.98, 312.52, 328.6, 332.0,
+                332.6, 337.91, 492.14, 498.17, 498.38, 512.71, 515.93, 517.73,
+                522.3,
+    /* 13 */    267.42, 270.95, 273.68, 277.1, 282.19, 281.95, 288.21, 289.19,
+                292.58, 297.27, 341.06, 410.82, 413.23, 418.27, 420.77, 423.27,
+                426.64, 426.59, 432.89, 431.39, 438.81, 440.5, 439.26, 444.22,
+    /* 14 */    170.96, 176.6, 176.51, 214.11, 219.5, 222.93, 222.38, 254.64,
+                253.16, 255.84, 263.34, 353.19, 355.7, 410.39, 413.21, 416.35,
+                419.67, 423.48, 428.06, 429.54, 432.98, 434.75, 435.96, 441.76,
+    /* 15 */    127.6, 132.89, 136.54, 261.66, 267.77, 270.69, 311.32, 314.69,
+                319.62, 397.77, 398.23, 531.74, 630.96, 632.78, 800.53, 942.26,
+                944.72, 0, 0, 0, 0, 0, 0, 0,
+    /* 16 */    262.76, 267.94, 268.35, 313.42, 313.68, 316.51, 332.93, 398.09,
+                400.57, 399.27, 527.43, 535.01, 534.75, 625.64, 631.93, 631.57,
+                799.6, 798.52, 944.25, 946.75, 946.91, 952.97, 1057.93, 1060.44,
+    /* 17 */    133.71, 135.24, 233.29, 237.57, 240.5, 265.28, 264.22, 270.11,
+                396.8, 403.8, 402.28, 469.33, 471.85, 478.18, 477.63, 592.91,
+                599.42, 603.17, 893.37, 952.37, 954.94, 1192.62, 1192.51, 0,
+    /* 18 */    221.21, 221.64, 223.71, 230.55, 369.35, 373.04, 378.99, 382.3,
+                381.67, 445.69, 444.51, 448.88, 450.86, 599.47, 750.24, 755.82,
+                755.19, 893.39, 893.03, 898.85, 897.46, 1124.42, 1125.9, 0,
+    /* 19 */    132.32, 133.33, 260.98, 265.14, 269.87, 313.93, 315.38, 315.4,
+                529.38, 530.73, 533.4, 630.93, 631.14, 796.83, 940.4, 944.4,
+                949.23, 1064.89, 1255.3, 1254.54, 1258.47, 1262.46, 2117.52, 0,
+    /* 20 */    309.36, 315.01, 315.25, 318.68, 400.84, 399.22, 599.95, 600.82,
+                632.04, 631.61, 635.78, 792.57, 797.03, 801.87, 946.98, 944.77,
+                952.91, 952.92, 1194.99, 1262.33, 1259.48, 1262.87, 1266.38,
+                1891.06
+    };
+};
+
+// Peak Envelope and Peak Envelope Att Rel
+peakenvelope(period, x) = loop ~ _
+    with {
+        loop(y) = max(abs(x), y * coeff);
+        twoPIforT = (2.0 * ma.PI) * (1.0 / ma.SR);
+        coeff = exp(-twoPIforT / max(ma.EPSILON, period));
+    };
+
+peakEnvAttRel(att, rel, x) = peakenvelope(rel - att, x) :
+    LPTPT(1.0 / max(ma.EPSILON, att));
+
+// Peakholder
+peakHolder(t, x) = loop ~ si.bus(2) : ! , _
+    with {
+        loop(timerState, outState) = timer , output
+            with {
+                isNewPeak = abs(x) >= outState;
+                isTimeOut = timerState >= rint(t * ma.SR);
+                bypass = isNewPeak | isTimeOut;
+                timer = (1.0 - bypass) * (timerState + 1);
+                output = bypass * (abs(x) - outState) + outState;
+            };
+    };
+peakHoldCascade(N, holdTime, x) = x : seq(i, N, peakHolder(holdTime / N));
+
+// Cascaded onepole smoothers with attack and release times
+smoother(N, att, rel, x) = loop ~ _
+    with {
+        loop(fb) = coeff * fb + (1.0 - coeff) * x
+            with {
+                cutoffCorrection = 1.0 / sqrt(pow(2.0, 1.0 / N) - 1.0);
+                coeff = ba.if(x > fb, attCoeff, relCoeff);
+                TWOPITC = (2.0 * ma.PI * (1 / ma.SR)) * cutoffCorrection;
+                attCoeff = exp(-TWOPITC / att);
+                relCoeff = exp(-TWOPITC / rel);
+            };
+    };
+smootherCascade(N, att, rel, x) = x : seq(i, N, smoother(N, att, rel));
+
+// Lookahead limiter
+gainAttenuation(th, att, hold, rel, x) =
+    th / (max(th, peakHoldCascade(8, att + hold, x)) :
+        smootherCascade(4, att, rel));
+LookaheadLimiter(th, x_) = xDelayed * gainAttenuation(th, .01, .1, .1, abs(x_))
+    with {
+        delay = rint((.01 / 8) * ma.SR) * 8;
+        xDelayed = x_ @ delay;
+    };
+LookaheadNormalizer(threshold, holdSec, decaySec) = _ <: 1 /
+    max(ma.MIN, (_ : peakHolder(holdSec) :
+        lptpt(1 / holdSec) : peakenvelope(decaySec))
+    ) * _ @ (holdSec * ma.SR);
+
+// RITI GUI
+globalNetworkGUI = vgroup("Mixer", hgroup("Global Control",
+    (hslider("[1] damping [style:knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+    (hslider("[2] forcing [style:knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+    (hslider("[3] forcing freq [style:knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+    (hslider("[4] q [style:knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+    (hslider("[5] freq shift [style:knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+    (hslider("[6] smooth [style:knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+    (hslider("[7] gain [style:knob]", 1, -1, 1, 0.001) * 4 : si.smoo),
+    (hslider("[9] interaction [style:knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+    (hslider("[10] reverberation [style:knob]", 0, 0, 1, 0.001) : si.smoo)
+));
+// Control Signals based on Input Signal (SAH)
+ControlSignalPath(N, seed, secMin, secMax, secMaxSmooth) = si.bus(2) :> _ : ((noise(N, seed) :
+    par(i, N, randomtrigger)), (LookaheadNormalizer(1.0, 0.1, 10) <: si.bus(N))
+    ) : ro.interleave(N, 2) : par(i, N, sah : si.smoo)
+with{
+    selector(sel, x, y) = x * (1 - sel) + y * (sel);
+    sah(t, x) = selector(t, _, x) ~ _;
+    // Noise - Linear Congruential Generator - Multiple Outputs
+    noise(N, initSeed) = ((_ + (initSeed - initSeed') :
+    seqN(N, (_ * a + c) % m )) ~ _ : par(i, N, _ / m))
+    with{
+        a = 18446744073709551557; c = 12345; m = 2 ^ 31;
+    };
+    // Sequential operations
+    seqN(N, OP) = _ <: seq(i, N, (OP <: _, _), si.bus(i + 1)) :
+    (_, !, si.bus(N - 1), !);
+    phasor0(f) = (_ <: _ + f, _) ~  _ % ma.SR : (!, _ / ma.SR);
+    derivate(x) = x < x';
+    pulseTrain(f) = phasor0(f) : derivate;
+    dirac = 1 - 1';
+    randomtrigger = (_ + dirac, abs * (1 / secMin) +
+        (1 / secMax) : sah : pulseTrain) ~ _;
+};
+// Mapping control signals and GUI
+controlMapping(i, global_damping, global_forcing, global_forcing_freq, global_q, global_freq_shift, global_smooth, global_gain, global_interaction) =
+hgroup("voice %i",
+    // control signal generation
+    (ControlSignalPath(9, 4321 * (i + 1), 10, 40, 60) : (si.bus(7), (_ * 0), _)),
+    // local GUI control for each voice
+    hgroup("individual control",
+        (vslider("[1] damping [style: knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+        (vslider("[2] forcing [style: knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+        (vslider("[3] forcing freq [style: knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+        (vslider("[4] q [style: knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+        (vslider("[5] freq shift [style: knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+        (vslider("[6] smooth [style: knob]", 0, -1, 1, 0.001) * 4 : si.smoo),
+        1,
+        (vslider("[8] preset [style:knob]", i, 1, 20, 1) - 1),
+        (vslider("[9] interaction [style: knob]", 0, -1, 1, 0.001) * 4 : si.smoo)
+    ) :>
+    // receive GUI global control for voices
+    (
+        (_ + global_damping),
+        (_ + global_forcing),
+        (_ + global_forcing_freq),
+        (_ + global_q),
+        (_ + global_freq_shift),
+        (_ + global_smooth),
+        (_ + global_gain),
+        (_ + 0),
+        (_ + global_interaction)
+    ) :
+    // compress the signals into a bipolar activation function
+    // conver bipolar signals to unipolar signals
+    (par(k, 7, ma.tanh : bitouni), _, (ma.tanh : bitouni)) :
+    // mapping for the signals
+    hgroup("inspectors",
+        hgroup("damping", map(i, 0, 0.1)),
+        hgroup("forcing", map(i, 0.6, 1)),
+        hgroup("forcing freq", map(i, 1, 400)),
+        hgroup("bp Q", map(i, 20, 400)),
+        8 ^ hgroup("bp Fshift", map(i, -1, 1)),
+        hgroup("bp smooth", map(i, 1, 20000)),
+        hgroup("gain", map(i, 0, 1)),
+        _,
+        hgroup("interaction", map(i, 0, 1))
+    )
+) : 
+(si.bus(6), (_ : mixerVoiceG(i)), si.bus(2))
+with{
+    // mapping function
+    map(i, minL, maxL) = _ * (maxL - minL) : _ + minL <:
+        _, vbargraph("%i [style:numerical]", minL, maxL) : attach;
+    // bipolar to unipolar function
+    bitouni = (_ + 1) / 2;
+    // Mixer
+    mixerVoiceG(i) =
+        vgroup("Mixer", hgroup("Channels", vgroup("%i", vol)))
+    with{
+        vol = * (vslider("G [midi:ctrl %i]", 0.001, 0.001, 2.0, 0.001));
+    };
+};
+
+// Reverb (Keith Barr Allpass Loop)
+reverb(I, O, N, SEQ, parspace, start, KRT) = si.bus(I) <:
+(InputStage :
+    (ro.interleave(N, N/(N/2)) : par(i, N, si.bus(2) :> _) :
+        par(i, N,
+        seq(k, SEQ,
+            // cleanfunc
+            ModAPF(
+                (primenumbers((k + start) + (i * parspace)) : MS2T),
+                (primenumbers((k + start) + (i * parspace)) / 100 : MS2T),
+                (0.5 / primenumbers((k + start) + (i * parspace)) : MS2T)
+            )
+        ) :
+        _ * KRT
+    )   : ro.crossNM(N - 1, 1)) ~
+    si.bus(N) :>
+OutputStage), OutGain :> par(i, O, _)
+with{
+    // In / Out - Network
+    InputStage = par(i, N, _);
+    OutputStage = par(i, O, _);
+    OutGain = par(i, O, _ * (1 - KRT));
+    // conversion : milliseconds T to samples
+    MS2T(t) = (t / 1000) * ma.SR;
+    // index of the primes numbers
+    primenumbers(index) = ba.take(index , list)
+    with{
+        list =  2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59,
+                61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127,
+                131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191,
+                193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257,
+                263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331,
+                337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401,
+                409, 419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467,
+                479, 487, 491, 499, 503, 509, 521, 523, 541, 547, 557;
+    };
+    // function for test prime numbers
+    cleanfunc(x, y, z) = _ * (x + y + z) ;
+    // AP Coefficents
+    COEFF = .65;
+    // Modulated Allpass filter
+    ModAPF(delsamples, samplesmod, freqmod) = ( + : _ <:
+        delayMod(delsamples, samplesmod, freqmod),
+        * (COEFF))~ * (-COEFF) : mem, _ : + : _
+        with{
+            delayMod(samples, samplesMod, freqMod, x) = delay
+            with{
+                modulation(f, samples) = ((os.osc(f) + 1) / 2) * samples;
+                delay = x : de.fdelay(samples,
+                                samples - modulation(freqMod, samplesMod));
+            };
+        };
+};
