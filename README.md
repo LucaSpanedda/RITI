@@ -18,6 +18,6 @@ The system is in a semi-autonomous configuration, meaning that it is capable of 
 ### compile for Linux with faust2alqt
 
 ```
-git clone --depth 1 --branch main https://github.com/LucaSpanedda/RITI.git && cd RITI/RITI1_State_Space_Study && faust2alqt -double RITI_2024.dsp && ./RITI_2024
+git clone --depth 1 --branch main https://github.com/LucaSpanedda/RITI.git && cd RITI && faust2alqt -double RITI.dsp && ./RITI
 
 ```
